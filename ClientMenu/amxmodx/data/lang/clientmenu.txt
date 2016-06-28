@@ -1,0 +1,49 @@
+[ Наименование пунктов меню не советую ставить длинными, иначе меню может обрезать.
+[ Операторы цвета: \w - белый цвет;
+[					\r - красный цвет;
+[					\y - жёлтый цвет;
+[					\d - сервый цвет.
+[
+[ Форматирование текста: 	^n - новая строка;
+[							^t - отступ (пробел);
+[							\R - выровнять текст по правому краю.
+[
+[ CLIENTM_* - Наименование пункта меню.
+[ CMD_* - исполнительнаякоманда для соответствующего пункта меню.
+
+					
+[ru]
+CLIENTM_0  	= 	\yМеню сервера:^n\dIP сервера:\r %s^n
+CLIENTM_1  	= 	1. Обнулить счёт \r/rs
+CLIENTM_2  	= 	2. Заткнуть игрока \r/mute
+CLIENTM_3  	= 	3. Название карты?
+CLIENTM_4  	= 	4. Купить Админку \r/adminka
+CLIENTM_5  	= 	5. Купить VIPку
+CLIENTM_6  	= 	6. Правила сервера
+CLIENTM_7  	= 	7. Написать админу
+CLIENTM_8  	= 	8. Следующая карта \r/nextmap
+CLIENTM_9  	= 	9. Голосовать за смену карты \r/rtv^n
+CLIENTM_10 	= 	0. Выход
+
+[en]
+CLIENTM_0  	= 	\yServer menu:^n\dserver IP:\r %s\w
+CLIENTM_1  	= 	1. Reset Score \r/rs
+CLIENTM_2  	= 	2. Disabling the player's voice \r/mute
+CLIENTM_3  	= 	3. What the map?
+CLIENTM_4  	= 	4. Buy Admin \r/adminka
+CLIENTM_5  	= 	5. Buy VIP privileges
+CLIENTM_6  	= 	6. Server rules
+CLIENTM_7  	= 	7. Write to admins
+CLIENTM_8  	= 	8. What's the next map? \r/nextmap
+CLIENTM_9  	= 	9. To vote for map changes \r/rtv^n
+CLIENTM_10 	= 	0. Exit
+
+CMD_M1	=	say /rs
+CMD_M2	=	say /mute
+CMD_M3	=	say currentmap
+CMD_M4	=	say /adminka
+CMD_M5	=	say /vipka
+CMD_M6	=	say /pravila
+CMD_M7	=	messagemode "say_team @"
+CMD_M8	=	say nextmap
+CMD_M9	=	say /rtv 		
