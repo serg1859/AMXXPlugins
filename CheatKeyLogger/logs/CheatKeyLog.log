@@ -1,7 +1,7 @@
-// 	Пример, как выглядит информация в логе.
+// 	РџСЂРёРјРµСЂ, РєР°Рє РІС‹РіР»СЏРґРёС‚ РёРЅС„РѕСЂРјР°С†РёСЏ РІ Р»РѕРіРµ.
 // L 06/17/2016 - 10:17:51: Log file started (file "cstrike\addons\amxmodx\logs\CheatKeyLog.log") (game "cstrike") (amx "1.8.3-dev+5063")
 // L 06/17/2016 - 10:17:51:  
 //  madPL4YER` used INS (IP: loopback, STEAMID: STEAM_ID_LAN)
 // L 06/17/2016 - 10:19:34: 
-// [DETECTED]: "madPL4YER`" использовал кнопку 'INS' (IP: loopback, STEAMID: STEAM_ID_LAN)
+// [DETECTED]: "madPL4YER`" РёСЃРїРѕР»СЊР·РѕРІР°Р» РєРЅРѕРїРєСѓ 'INS' (IP: loopback, STEAMID: STEAM_ID_LAN)
 
