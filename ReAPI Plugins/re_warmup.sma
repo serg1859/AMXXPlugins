@@ -3,6 +3,12 @@
 * 	Safety1st for his 'Spawn Protection' plugin, I took idea with bar
 *  Adidasmen for help with ReApi
 *  a2 for tests
+
+update: 0.8a (wopox1337)
+	- Убраны лишние дефайны;
+	- Добавлен квар warmup_time (Сколько длится разминка);
+	
+	Спасибо Safety1st за плагин Uncommon Knife Warmup, идея с блокировкой оружия взята у него.
 **/
 
 #include <amxmodx>
@@ -13,19 +19,16 @@
 #pragma semicolon 1
 
 new const PLUGIN[] = "Re WarmUp";
-new const VERSION[] = "0.8";
+new const VERSION[] = "0.9";
 new const AUTHOR[] = "gyxoBka";
 
 /*---------------EDIT ME------------------*/
 
-#define RESPAWN_TIME 		3				// через сколько секунд игрок возродится
-#define PROTECTION_TIME 	3				// сколько секунд действует защита после возрождения
+#define RESPAWN_TIME 		1				// через сколько секунд игрок возродится
+#define PROTECTION_TIME 	2				// сколько секунд действует защита после возрождения
 
-#define RESPAWN_BAR							// закомментируйте, чтобы не показывать полосу после смерти
+//#define RESPAWN_BAR							// закомментируйте, чтобы не показывать полосу после смерти
 #define PROTECTION_BAR						// закомментируйте, чтобы не показывать полосу во время защиты
-
-#define BUY_TIME 			1.5				// квар mp_buytime во время разминки ( Дефолт: 1 минута 30 секунд )
-#define WARMUP_TIME 		90				// время разминки в секундах ( Дефолт: 1 минута 30 секунд )
 
 #define HUD_COLOR_RGB 		67, 218, 231	// цвет RGB худа
 
@@ -46,29 +49,46 @@ enum Team
 
 new bool:g_bGameCommencing;
 new Float:g_fDeafultBuyTime, g_iDefaultRoundInfinite, g_iDefaultRespawnTime, g_iDefaultFreezeTime;
-new HookChain:RegHookSpawn, HookChain:RegHookKilled, HookChain:RegHookDeadPlayer;
+new HookChain:RegHookSpawn, HookChain:RegHookKilled, HookChain:RegHookDeadPlayer, HookChain:RegHookAddPlayerItem;
 new g_iCountdown, g_HudSync, g_MsgBarTime;
+
+new g_pCvarWarmupTime, Float:g_fBuyTime;
+new g_pCvarWarmupMode, bool:g_bKnifeMode;
+
+new gMsgScenarioIcon;
+
+enum {
+	FREE_BUY,
+	ONLY_KNIFE
+}
 
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR);
 
 	register_cvar( "rewarmup", VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED );
+	g_pCvarWarmupTime = register_cvar("warmup_time", "90");
+	g_pCvarWarmupMode = register_cvar("warmup_mode", "1");
 
-	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing") ;
+	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing");
 
-	RegHookSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", true);
-	RegHookKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", true);
-	RegHookDeadPlayer = RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", false);
-
-	DisableHookChain(RegHookSpawn);
-	DisableHookChain(RegHookKilled);
-	DisableHookChain(RegHookDeadPlayer);
-
+	gMsgScenarioIcon = get_user_msgid( "Scenario" );
+	
+	DisableHookChain(RegHookSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", true));
+	DisableHookChain(RegHookKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", true));
+	DisableHookChain(RegHookDeadPlayer = RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", false));
+	
+	if(get_pcvar_num(g_pCvarWarmupMode) == ONLY_KNIFE)
+	{
+		g_bKnifeMode = true;
+		DisableHookChain(RegHookAddPlayerItem = RegisterHookChain(RG_CBasePlayer_AddPlayerItem, "CBasePlayer_AddPlayerItem", false));
+	}
+	
 	g_fDeafultBuyTime = get_cvar_float("mp_buytime");
 	g_iDefaultRespawnTime = get_cvar_num("mp_roundrespawn_time");
 	g_iDefaultRoundInfinite = get_cvar_num("mp_round_infinite");
 	g_iDefaultFreezeTime = get_cvar_num("mp_freezetime");
+	g_fBuyTime = get_pcvar_float(g_pCvarWarmupTime)/60.0;
 
 	g_HudSync = CreateHudSyncObj();
 
@@ -87,16 +107,25 @@ public EventGameCommencing()
 {
 	if(g_bGameCommencing) return;
 
+	new iWarmupTime = get_pcvar_num(g_pCvarWarmupTime);
+	
 	EnableHookChain(RegHookSpawn);
 	EnableHookChain(RegHookKilled);
-	EnableHookChain(RegHookDeadPlayer);
+	if(g_bKnifeMode)
+	{
+		EnableHookChain(RegHookAddPlayerItem);
+	}else{
+		EnableHookChain(RegHookDeadPlayer);
+	}
+	
+	
 
-	set_cvar_float("mp_buytime", BUY_TIME);
-	set_cvar_num("mp_roundrespawn_time", WARMUP_TIME);
+	set_cvar_float("mp_buytime", g_fBuyTime);
+	set_cvar_num("mp_roundrespawn_time", iWarmupTime);
 	set_cvar_num("mp_round_infinite", 1);
 	set_cvar_num("mp_freezetime", 0);
 
-	g_iCountdown = WARMUP_TIME;
+	g_iCountdown = iWarmupTime;
 	g_bGameCommencing = true;
 
 	set_task(1.0, "TaskCountdownRestart", _, _, _, "a", g_iCountdown);
@@ -127,7 +156,7 @@ public CBasePlayer_Killed(id, pevAttacker, iGib)
 public CBasePlayer_Spawn(id)
 {
 	if (!is_user_alive(id)) return HC_CONTINUE;
-
+	
 	set_user_godmode( id, .godmode = 1 );
 	rg_add_account(id, 16000, AS_SET, true);
 
@@ -150,7 +179,13 @@ public CBasePlayer_Spawn(id)
 		
 	remove_task(TaskID);
 	set_task( PROTECTION_TIME.0, "DisableProtection", TaskID );
-		
+	
+	if(g_bKnifeMode)
+	{
+		SendScenarioIcon(id);
+	}
+	
+	
 	return HC_CONTINUE;
 }
 
@@ -190,7 +225,12 @@ public TaskCountdownRestart()
 		{
 			DisableHookChain(RegHookSpawn);
 			DisableHookChain(RegHookKilled);
-			DisableHookChain(RegHookDeadPlayer);
+			if(g_bKnifeMode)
+			{
+				DisableHookChain(RegHookAddPlayerItem);
+			}else{
+				DisableHookChain(RegHookDeadPlayer);
+			}
 			
 			set_cvar_float("mp_buytime", g_fDeafultBuyTime);
 			set_cvar_num("mp_round_infinite", g_iDefaultRoundInfinite);
@@ -219,4 +259,41 @@ stock ShowBar(const id, const iTime)
 	message_begin(MSG_ONE, g_MsgBarTime, _, id);
 	write_short(iTime);
 	message_end();
+}
+
+stock SendScenarioIcon(id)
+{
+	static szKnifeIcon[] = "d_knife";
+
+	const ICON_OFF 	= 0;
+	const ICON_ON  	= 1;
+
+	if(id) {
+		// to show icon I use per player msgs to make sure every player will get msg
+		message_begin(MSG_ONE_UNRELIABLE, gMsgScenarioIcon, _, id);
+		write_byte(ICON_ON);
+		write_string(szKnifeIcon);
+		write_byte(0);	// no alpha value
+		message_end();
+	}
+	else
+	{
+		// it is 'global' msg that I use to hide icon only
+		message_begin(MSG_BROADCAST, gMsgScenarioIcon);
+		write_byte(ICON_OFF);
+		message_end();
+	}
+}
+
+public CBasePlayer_AddPlayerItem(const id, const weapon ) {
+	if( get_member(weapon, m_iId) != ITEM_KNIFE ){
+
+		// only knifes are allowed. it is the most simple (but smart) way to prevent using all other weapons
+		set_entvar(weapon, var_flags, get_entvar( weapon, var_flags ) | FL_KILLME );
+		
+		SetHookChainReturn(ATYPE_INTEGER);
+		return HC_SUPERCEDE;
+	}
+	
+	return HC_CONTINUE;
 }
