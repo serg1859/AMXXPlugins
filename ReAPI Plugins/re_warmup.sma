@@ -263,14 +263,13 @@ stock ShowBar(const id, const iTime)
 
 stock SendScenarioIcon(id)
 {
-	static szKnifeIcon[] = "d_knife";
-
+	new const szKnifeIcon[] = "d_knife";
 	const ICON_OFF 	= 0;
 	const ICON_ON  	= 1;
 
 	if(id) {
 		// to show icon I use per player msgs to make sure every player will get msg
-		message_begin(MSG_ONE_UNRELIABLE, gMsgScenarioIcon, _, id);
+		message_begin(MSG_ONE, gMsgScenarioIcon, _, id);
 		write_byte(ICON_ON);
 		write_string(szKnifeIcon);
 		write_byte(0);	// no alpha value
