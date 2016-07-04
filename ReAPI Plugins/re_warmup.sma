@@ -9,10 +9,12 @@ update: 0.9 (wopox1337)
 	- Добавлен квар warmup_time (Сколько длится разминка);
 	- Добавлен квар warmup_mode:
 		0 - 16000$ на респауне и покупка любого оружия,
-		1 - Режим DeathMatch только на ножах.
+		1 - Режим только на ножах.
 	- Добавлен Knife Icon (Scenario), при режиме 1;
 	- Добавлен дефайн позиции HUD сообщения разминки;
-	- Добавлено Время раунда на разминке отображает время разминки.
+	- Добавлено Время раунда на разминке отображает время разминки;
+	update:0.9a
+	- На время разминки бомба не выдаётся.
 	
 	Спасибо Safety1st за плагин Uncommon Knife Warmup, некоторые идеи были взяты у него.
 **/
@@ -25,7 +27,7 @@ update: 0.9 (wopox1337)
 #pragma semicolon 1
 
 new const PLUGIN[] = "Re WarmUp";
-new const VERSION[] = "0.9";
+new const VERSION[] = "0.9a";
 new const AUTHOR[] = "gyxoBka";
 
 /*---------------EDIT ME------------------*/
@@ -56,7 +58,7 @@ enum Team
 
 new bool:g_bGameCommencing;
 new Float:g_fDeafultBuyTime, g_iDefaultRoundInfinite, g_iDefaultRespawnTime, g_iDefaultFreezeTime;
-new HookChain:RegHookSpawn, HookChain:RegHookKilled, HookChain:RegHookDeadPlayer, HookChain:RegHookAddPlayerItem;
+new HookChain:RegHookSpawn, HookChain:RegHookKilled, HookChain:RegHookDeadPlayer, HookChain:RegHookAddPlayerItem, HookChain:RegHookGiveC4;
 new g_iCountdown, g_HudSync, g_MsgBarTime;
 
 new g_pCvarWarmupTime, Float:g_fBuyTime;
@@ -75,21 +77,21 @@ public plugin_init()
 
 	register_cvar( "rewarmup", VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED );
 	g_pCvarWarmupTime = register_cvar("warmup_time", "90");
-	g_pCvarWarmupMode = register_cvar("warmup_mode", "1");
+	g_pCvarWarmupMode = register_cvar("warmup_mode", "0");
 
 	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing");
 
 	g_MsgScenarioIcon = get_user_msgid( "Scenario" );
 	g_MsgRoundTime = get_user_msgid( "RoundTime" );
 	
-	DisableHookChain(RegHookSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", true));
-	DisableHookChain(RegHookKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", true));
-	DisableHookChain(RegHookDeadPlayer = RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", false));
-	
+	DisableHookChain(RegHookSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true));
+	DisableHookChain(RegHookKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", .post = true));
+	DisableHookChain(RegHookDeadPlayer = RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", .post = false));
+	DisableHookChain(RegHookGiveC4 = RegisterHookChain(RG_CSGameRules_GiveC4, "CSGameRules_GiveC4", .post = false));
 	if(get_pcvar_num(g_pCvarWarmupMode) == ONLY_KNIFE)
 	{
 		g_bKnifeMode = true;
-		DisableHookChain(RegHookAddPlayerItem = RegisterHookChain(RG_CBasePlayer_AddPlayerItem, "CBasePlayer_AddPlayerItem", false));
+		DisableHookChain(RegHookAddPlayerItem = RegisterHookChain(RG_CBasePlayer_AddPlayerItem, "CBasePlayer_AddPlayerItem", .post = false));
 	}
 	
 	g_fDeafultBuyTime = get_cvar_float("mp_buytime");
@@ -120,6 +122,7 @@ public EventGameCommencing()
 	
 	EnableHookChain(RegHookSpawn);
 	EnableHookChain(RegHookKilled);
+	EnableHookChain(RegHookGiveC4);
 	if(g_bKnifeMode)
 	{
 		EnableHookChain(RegHookAddPlayerItem);
@@ -237,6 +240,7 @@ public TaskCountdownRestart()
 			
 			DisableHookChain(RegHookSpawn);
 			DisableHookChain(RegHookKilled);
+			DisableHookChain(RegHookGiveC4);
 			if(g_bKnifeMode)
 			{
 				DisableHookChain(RegHookAddPlayerItem);
@@ -315,4 +319,8 @@ public Message_RoundTime( msgid, dest, receiver ) {
 	/* Msg is sent at player spawn, Round_Start and during HUD initialization in UpdateClientData().
 	   Just fake the timer, it is easier than adjusting of 'mp_roundtime' cvar */
 	set_msg_arg_int( ARG_TIME_REMAINING, ARG_SHORT, g_iCountdown );
+}
+
+public CSGameRules_GiveC4() { 
+	return HC_SUPERCEDE; 
 }
