@@ -4,11 +4,17 @@
 *  Adidasmen for help with ReApi
 *  a2 for tests
 
-update: 0.8a (wopox1337)
+update: 0.9 (wopox1337)
 	- Убраны лишние дефайны;
 	- Добавлен квар warmup_time (Сколько длится разминка);
+	- Добавлен квар warmup_mode:
+		0 - 16000$ на респауне и покупка любого оружия,
+		1 - Режим DeathMatch только на ножах.
+	- Добавлен Knife Icon (Scenario), при режиме 1;
+	- Добавлен дефайн позиции HUD сообщения разминки;
+	- Добавлено Время раунда на разминке отображает время разминки.
 	
-	Спасибо Safety1st за плагин Uncommon Knife Warmup, идея с блокировкой оружия взята у него.
+	Спасибо Safety1st за плагин Uncommon Knife Warmup, некоторые идеи были взяты у него.
 **/
 
 #include <amxmodx>
@@ -27,10 +33,11 @@ new const AUTHOR[] = "gyxoBka";
 #define RESPAWN_TIME 		1				// через сколько секунд игрок возродится
 #define PROTECTION_TIME 	2				// сколько секунд действует защита после возрождения
 
-//#define RESPAWN_BAR							// закомментируйте, чтобы не показывать полосу после смерти
+//#define RESPAWN_BAR						// закомментируйте, чтобы не показывать полосу после смерти
 #define PROTECTION_BAR						// закомментируйте, чтобы не показывать полосу во время защиты
 
 #define HUD_COLOR_RGB 		67, 218, 231	// цвет RGB худа
+#define HUD_MSG_POS 		0.0, -1.0		// Позиция HUD сообщения о разминке
 
 #define RED_TEAM_COLOUR   	255, 0, 0    	// цвет RGB во время защиты для ТТ ( рендеринг )
 #define BLUE_TEAM_COLOUR   	0, 0, 255		// цвет RGB во время защиты для CT ( рендеринг )
@@ -55,7 +62,7 @@ new g_iCountdown, g_HudSync, g_MsgBarTime;
 new g_pCvarWarmupTime, Float:g_fBuyTime;
 new g_pCvarWarmupMode, bool:g_bKnifeMode;
 
-new gMsgScenarioIcon;
+new g_MsgScenarioIcon, g_MsgRoundTime, hookMsgRoundTime;
 
 enum {
 	FREE_BUY,
@@ -72,7 +79,8 @@ public plugin_init()
 
 	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing");
 
-	gMsgScenarioIcon = get_user_msgid( "Scenario" );
+	g_MsgScenarioIcon = get_user_msgid( "Scenario" );
+	g_MsgRoundTime = get_user_msgid( "RoundTime" );
 	
 	DisableHookChain(RegHookSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", true));
 	DisableHookChain(RegHookKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", true));
@@ -108,6 +116,7 @@ public EventGameCommencing()
 	if(g_bGameCommencing) return;
 
 	new iWarmupTime = get_pcvar_num(g_pCvarWarmupTime);
+	hookMsgRoundTime = register_message( g_MsgRoundTime, "Message_RoundTime" );
 	
 	EnableHookChain(RegHookSpawn);
 	EnableHookChain(RegHookKilled);
@@ -117,8 +126,6 @@ public EventGameCommencing()
 	}else{
 		EnableHookChain(RegHookDeadPlayer);
 	}
-	
-	
 
 	set_cvar_float("mp_buytime", g_fBuyTime);
 	set_cvar_num("mp_roundrespawn_time", iWarmupTime);
@@ -158,7 +165,10 @@ public CBasePlayer_Spawn(id)
 	if (!is_user_alive(id)) return HC_CONTINUE;
 	
 	set_user_godmode( id, .godmode = 1 );
-	rg_add_account(id, 16000, AS_SET, true);
+	if(!g_bKnifeMode)
+	{
+		rg_add_account(id, 16000, AS_SET, true);
+	}
 
 	#if defined GLOW_THICK
 	switch(get_member(id, m_iTeam)) 
@@ -223,6 +233,8 @@ public TaskCountdownRestart()
 	{
 		case 0: 
 		{
+			unregister_message( g_MsgRoundTime, hookMsgRoundTime );
+			
 			DisableHookChain(RegHookSpawn);
 			DisableHookChain(RegHookKilled);
 			if(g_bKnifeMode)
@@ -242,7 +254,7 @@ public TaskCountdownRestart()
 		}	
 		default:
 	{
-		set_hudmessage(HUD_COLOR_RGB, 0.0, -1.0, 0, 0.0, 1.0, 0.0, 0.0);
+		set_hudmessage(HUD_COLOR_RGB, HUD_MSG_POS, .holdtime = 1.0);
 		ShowSyncHudMsg(0, g_HudSync, "^t^t^t[Разминка]^n^t^tОсталось %d сек.", g_iCountdown);
 	}	
 }
@@ -250,7 +262,7 @@ public TaskCountdownRestart()
 
 public EndHud()
 {
-	set_hudmessage(HUD_COLOR_RGB, -1.0, 0.3, 0, 0.0, 5.0, 0.0, 0.0);
+	set_hudmessage(HUD_COLOR_RGB, -1.0, 0.3, .holdtime = 5.0);
 	ShowSyncHudMsg(0, g_HudSync, "СПАСИБО ЗА РАЗМИНКУ!^nПРИЯТНОЙ ИГРЫ!");
 }
 
@@ -269,7 +281,7 @@ stock SendScenarioIcon(id)
 
 	if(id) {
 		// to show icon I use per player msgs to make sure every player will get msg
-		message_begin(MSG_ONE, gMsgScenarioIcon, _, id);
+		message_begin(MSG_ONE, g_MsgScenarioIcon, _, id);
 		write_byte(ICON_ON);
 		write_string(szKnifeIcon);
 		write_byte(0);	// no alpha value
@@ -278,7 +290,7 @@ stock SendScenarioIcon(id)
 	else
 	{
 		// it is 'global' msg that I use to hide icon only
-		message_begin(MSG_BROADCAST, gMsgScenarioIcon);
+		message_begin(MSG_BROADCAST, g_MsgScenarioIcon);
 		write_byte(ICON_OFF);
 		message_end();
 	}
@@ -295,4 +307,12 @@ public CBasePlayer_AddPlayerItem(const id, const weapon ) {
 	}
 	
 	return HC_CONTINUE;
+}
+
+public Message_RoundTime( msgid, dest, receiver ) {
+	const ARG_TIME_REMAINING = 1;
+
+	/* Msg is sent at player spawn, Round_Start and during HUD initialization in UpdateClientData().
+	   Just fake the timer, it is easier than adjusting of 'mp_roundtime' cvar */
+	set_msg_arg_int( ARG_TIME_REMAINING, ARG_SHORT, g_iCountdown );
 }
