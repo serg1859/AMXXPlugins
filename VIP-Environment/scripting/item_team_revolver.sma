@@ -8,7 +8,7 @@ new const ALIAS_CMD_TT[] = "brev"
 new const ALIAS_CMD_CT[] = "srev"
 
 /** other settings */
-// #define WEAPON_STRIP							//
+#define WEAPON_STRIP							//
 
 /** weapon settings */
 #define WEAPON_SPEED_TT			265		// weapon tt

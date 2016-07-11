@@ -7,7 +7,7 @@ new const ITEM_NAME[] = "Item Wooden Awp"
 new const ALIAS_CMD[] = "aw"						// alias buy command
 
 /** other settings */
-// #define WEAPON_STRIP								//
+#define WEAPON_STRIP								//
 
 /** weapon settings */
 // #define WEAPON_AMMO			50				// or default bpammo

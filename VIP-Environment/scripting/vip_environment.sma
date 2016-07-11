@@ -18,17 +18,14 @@
 //■■■■■■■■■■■■■■■■■■■■■■■ CONFIG START ■■■■■■■■■■■■■■■■■■■■■■■//
 
 new const MAIN_MENU_CMD[] = 		"mainmenu"
-new const MAIN_MENU_SAY_CMD[] = 	"say /mm"
 new const WEAPON_MENU_CMD[] = 		"weaponmenu"
-new const WEAPON_MENU_SAY_CMD[] = 	"say /wm"
 new const BUY_MENU_CMD[] = 			"buymenu"
-new const BUY_MENU_SAY_CMD[] =		"say /bm"
+
 new const REBUY_CMD[] = 			"vrebuy"
-new const REBUY_SAY_CMD[] = 		"say /rebuy"
 
 #define CS_DEFAULT_BUY_SYSTEM		// buying time & buyzone check
 // #define DONT_CLOSE_MENU			//
-// #define WEAPON_STRIP				//
+#define WEAPON_STRIP				//
 // #define VAULT_EXPIRE_DAYS		1	// save user settings
 
 // #define DEBUG					// console info
@@ -308,11 +305,6 @@ public plugin_init()
 	register_clcmd(WEAPON_MENU_CMD, "ClCmd_WeaponMenu")
 	register_clcmd(BUY_MENU_CMD, "ClCmd_BuyMenu")
 	register_clcmd(REBUY_CMD, "ClCmd_Rebuy")
-
-	register_clcmd(MAIN_MENU_SAY_CMD, "ClCmd_MainMenu")
-	register_clcmd(WEAPON_MENU_SAY_CMD, "ClCmd_WeaponMenu")
-	register_clcmd(BUY_MENU_SAY_CMD, "ClCmd_BuyMenu")
-	register_clcmd(REBUY_SAY_CMD, "ClCmd_Rebuy")
 
 	register_event("HLTV", "Event_NewRound", "a", "1=0", "2=0")
 	register_event("TextMsg", "Event_NewGame", "a", "2=#Game_will_restart_in", "2=#Game_Commencing")
