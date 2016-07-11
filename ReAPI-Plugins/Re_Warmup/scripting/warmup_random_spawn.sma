@@ -11,10 +11,11 @@
 new Float:g_flSpawns[MAX_SPAWNS][9], HookChain:g_hPlayerSpawn, g_iSpawnCount
 new g_pCvarWarmupRandom
 new const BUYZONE[] = "func_buyzone"
+new g_iLastSpawnIndex[MAX_CLIENTS+1]
 
 public plugin_init()
 {
-	register_plugin("Warmup Spawn Random", "0.0.3", "Avalanche | Vaqtincha")
+	register_plugin("Warmup Spawn Random", "0.0.4", "Vaqtincha")
 	g_pCvarWarmupRandom = register_cvar("warmup_random_spawn", "1")
 	DisableHookChain(g_hPlayerSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true))
 	readspawns()
@@ -43,16 +44,18 @@ public plugin_pause()
 	RemoveBuyZone()
 }
 
+public client_putinserver(id) 
+	g_iLastSpawnIndex[id] = -1
+
 public CBasePlayer_Spawn(id)
 {
-	if(is_user_alive(id) && g_iSpawnCount > 2)
+	if(is_user_alive(id))
 	{
 		do_random_spawn(id)
 	}
 }
 
-// code from GUNGAME mod
-// get all of our spawns into their arrays
+// Original code by Avalanche
 readspawns()
 {
 	new SpawnFile[MAX_PATH_LEN + 32], MapName[32], fp
@@ -107,46 +110,40 @@ readspawns()
 
 do_random_spawn(id)
 {
-	static Float:vecHolder[3]
-	new sp_index = random_num(0, g_iSpawnCount-1)
-	
+	if(g_iSpawnCount < 2)
+		return
+
+	new Float:vecHolder[3], sp_index = 0
+	sp_index = random_num(0, g_iSpawnCount-1)
+
 	// get origin for comparisons
 	vecHolder[0] = g_flSpawns[sp_index][0]
 	vecHolder[1] = g_flSpawns[sp_index][1]
 	vecHolder[2] = g_flSpawns[sp_index][2]
 
-	// this one is taken
-	if(!is_hull_vacant(vecHolder,HULL_HUMAN) && g_iSpawnCount > 1)
-	{	// attempt to pick another random one up to three times
-		new i
-		for(i = 0; i < 3; i++)
+	if(!is_hull_vacant(vecHolder, HULL_HUMAN) || sp_index == g_iLastSpawnIndex[id])
+	{
+		new newe2, i
+		for(i = 0; i < sizeof(g_flSpawns); i++)
 		{
-			sp_index = random_num(0,g_iSpawnCount-1)
+			if(i == g_iLastSpawnIndex[id])
+				continue
 
-			vecHolder[0] = g_flSpawns[sp_index][0]
-			vecHolder[1] = g_flSpawns[sp_index][1]
-			vecHolder[2] = g_flSpawns[sp_index][2]
-			
-			if(is_hull_vacant(vecHolder,HULL_HUMAN)) break
-		}
-		// we made it through the entire loop, no free spaces
-		if(i == 3)
-		{	
-			// just find the first available
-			for(i = sp_index + 1; i != sp_index; i++)
-			{	
-				// start over when we reach the end
-				if(i >= g_iSpawnCount) i = 0
-				
-				vecHolder[0] = g_flSpawns[i][0]
-				vecHolder[1] = g_flSpawns[i][1]
-				vecHolder[2] = g_flSpawns[i][2]
-				// free space! office space!
-				if(is_hull_vacant(vecHolder,HULL_HUMAN))
-				{
-					sp_index = i
-					break
-				}
+			i = random_num(0, g_iSpawnCount-1)
+			if(i == g_iLastSpawnIndex[id])
+				continue
+
+			newe2 = random_num(i, g_iSpawnCount-1)
+			// get origin for comparisons
+			vecHolder[0] = g_flSpawns[newe2][0]
+			vecHolder[1] = g_flSpawns[newe2][1]
+			vecHolder[2] = g_flSpawns[newe2][2]
+			if(is_hull_vacant(vecHolder, HULL_HUMAN)) 
+			{
+				sp_index = newe2
+				break
+			}else{
+				return
 			}
 		}
 	}
@@ -156,17 +153,21 @@ do_random_spawn(id)
 	vecHolder[1] = g_flSpawns[sp_index][1]
 	vecHolder[2] = g_flSpawns[sp_index][2]
 	engfunc(EngFunc_SetOrigin,id,vecHolder)
+
 	// angles
 	vecHolder[0] = g_flSpawns[sp_index][3]
 	vecHolder[1] = g_flSpawns[sp_index][4]
 	vecHolder[2] = g_flSpawns[sp_index][5]
 	set_pev(id,pev_angles,vecHolder)
+
 	// vangles
 	vecHolder[0] = g_flSpawns[sp_index][6]
 	vecHolder[1] = g_flSpawns[sp_index][7]
 	vecHolder[2] = g_flSpawns[sp_index][8]
 	set_pev(id,pev_v_angle,vecHolder)
 	set_pev(id,pev_fixangle,1)
+
+	g_iLastSpawnIndex[id] = sp_index
 }
 
 RemoveBuyZone()

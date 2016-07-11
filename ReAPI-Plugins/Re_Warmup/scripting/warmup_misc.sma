@@ -54,22 +54,20 @@ public WarmupStarted(WarmupModes:iMode, iTime)
 		EnableHookChain(g_hAddAccount)
 	}
 #endif
-#if defined FAST_SWITCH_DELAY
+
 	if(iMode != ONLY_KNIFE)
 	{	
+#if defined FAST_SWITCH_DELAY
 		EnableHamForward(g_hDeploy[0])
 		EnableHamForward(g_hDeploy[1])
-	}
 #endif
-#if defined SILENCED_REMEMBER
-	if(iMode == EQUIP_MODE || iMode == RANDOM_WEAPON)
-	{
+#if defined SILENCED_REMEMBER	
 		EnableHamForward(g_hAddToPlayer[0])
 		EnableHamForward(g_hAddToPlayer[1])
 		EnableHamForward(g_hSecondaryAttack[0])
 		EnableHamForward(g_hSecondaryAttack[1])
-	}
 #endif
+	}
 }
 
 public WarmupEnded()
@@ -110,7 +108,6 @@ public CBasePlayer_AddAccount(const intex, amount, RewardType:type, bool:bTrackC
 	}
 
 	return HC_CONTINUE
-
 }
 #endif
 #if defined SILENCED_REMEMBER

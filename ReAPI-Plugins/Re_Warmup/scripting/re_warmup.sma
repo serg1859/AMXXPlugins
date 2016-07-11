@@ -63,6 +63,8 @@ new g_eWeapons[][WEAPON_DATA] = { /* Эту НЕ ТРОГАЙ! :D */ {"", 0, 0, 
 }
 
 #define USE_API
+#define TIME_MIN 	30 	// 30 sec
+#define TIME_MAX 	600	// 10 min
 
 /**■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG END ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■*/
 
@@ -152,7 +154,7 @@ public WarmupModes:NativeGetWarmupMode(iPlugin, iParams)
 public NativeSetWarmupMode(iPlugin, iParams)
 {
 	new iTime = get_param(2)
-	(iTime <= 0) ? WarmupEnd(.bSvRestart = true, .bNotify = true) : WarmupStart(WarmupModes:clamp(get_param(1), 0, 4), iTime)
+	(iTime <= 0) ? WarmupEnd(.bSvRestart = true, .bNotify = true) : WarmupStart(WarmupModes:clamp(get_param(1), 0, 4), clamp((iTime), TIME_MIN, TIME_MAX))
 #endif
 }
 
@@ -199,13 +201,13 @@ public ConCmd_WarmupStart(id, level)
 
 	if(read_argc() < 2)
 	{
-		WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), get_pcvar_num(g_pCvarWarmupTime))
+		WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), clamp(get_pcvar_num(g_pCvarWarmupTime), TIME_MIN, TIME_MAX))
 	}else{
 		new szArg[5]
 		read_argv(1, szArg, charsmax(szArg))
 		new iTime = str_to_num(szArg)
 
-		(iTime <= 0) ? WarmupEnd(.bSvRestart = true, .bNotify = true) : WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), iTime)
+		(iTime <= 0) ? WarmupEnd(.bSvRestart = true, .bNotify = true) : WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), clamp((iTime), TIME_MIN, TIME_MAX))
 	}
 
 	return PLUGIN_HANDLED
@@ -224,7 +226,7 @@ public EventGameCommencing()
 {
 	if(!g_bFristRestart)
 	{
-		WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), get_pcvar_num(g_pCvarWarmupTime))
+		WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), clamp(get_pcvar_num(g_pCvarWarmupTime), TIME_MIN, TIME_MAX))
 		g_bFristRestart = true
 	}
 }
