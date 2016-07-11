@@ -572,3 +572,4 @@ stock rm_set_rendering(index, fx = kRenderFxNone, r=255, g=255, b=255, amount=16
 	set_entvar(index, var_renderamt, float(amount))
 	// return 1
 }
+
