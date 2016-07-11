@@ -391,8 +391,18 @@ public CSGameRules_DeadPlayerWeapons(const index)
 public CBasePlayer_Killed(id, pevAttacker, iGib)
 {
 	set_task(RESPAWN_TIME.0, "Respawn", TASK_RESPAWN_ID + id)
+#if defined NODRAW_CORPSES
+	set_entvar(id, var_effects, EF_NODRAW)
+#endif
+
+#if defined RESPAWN_BAR
+	ShowBar(id, RESPAWN_TIME)
+#else
+	client_print(id, print_center, "Через %d секунды Вы возродитесь", RESPAWN_TIME)
+#endif
+
 #if defined AUTO_RELOAD_WEAPON
-	if(g_iWarmupMode != ONLY_KNIFE && is_user_alive(pevAttacker))
+	if(g_iWarmupMode != ONLY_KNIFE && id != pevAttacker && is_user_alive(pevAttacker))
 	{
 		new iActiveWeapon = get_member(pevAttacker, m_pActiveItem)
 		if(iActiveWeapon > 0)
@@ -400,14 +410,6 @@ public CBasePlayer_Killed(id, pevAttacker, iGib)
 			rg_instant_reload_weapons(pevAttacker, iActiveWeapon)
 		}
 	}
-#endif
-#if defined NODRAW_CORPSES
-	set_entvar(id, var_effects, EF_NODRAW)
-#endif
-#if defined RESPAWN_BAR
-	ShowBar(id, RESPAWN_TIME)
-#else
-	client_print(id, print_center, "Через %d секунды Вы возродитесь", RESPAWN_TIME)
 #endif
 }
 

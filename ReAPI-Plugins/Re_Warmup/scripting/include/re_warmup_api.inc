@@ -36,6 +36,3 @@ native SetWarmupMode(WarmupModes:iMode, iTime)
 forward WarmupStarted(WarmupModes:iMode, iTime)
 
 forward WarmupEnded()
-
-
-
