@@ -53,10 +53,10 @@ new g_eWeapons[][WEAPON_DATA] = { /* Эту НЕ ТРОГАЙ! :D */ {"", 0, 0, 
 
 	// ,{"IMI Galil", WEAPON_GALIL, 90, TEAM_TERRORIST}
 	// ,{"GIAT FAMAS", WEAPON_FAMAS, 90, TEAM_CT}
-	,{"AK-47", WEAPON_AK47, 90, TEAM_TERRORIST}
-	,{"Colt M4A1", WEAPON_M4A1, 90, TEAM_CT}
-	// ,{"Steyr Scout", WEAPON_SCOUT, 90, TEAM_ALL}
-	// ,{"AI Arctic Warfare Magnum", WEAPON_AWP, 30, TEAM_ALL}
+	// ,{"AK-47", WEAPON_AK47, 90, TEAM_TERRORIST}
+	// ,{"Colt M4A1", WEAPON_M4A1, 90, TEAM_CT}
+	,{"Steyr Scout", WEAPON_SCOUT, 90, TEAM_ALL}
+	,{"AI Arctic Warfare Magnum", WEAPON_AWP, 30, TEAM_ALL}
 	// ,{"FN Minimi M249 Para", WEAPON_M249, 200, TEAM_ALL}
 	// ,{"MP5 Navy", WEAPON_MP5N, 120, TEAM_ALL}
 	// ,{"Desert Eagle", WEAPON_DEAGLE, 35, TEAM_ALL}
@@ -74,7 +74,7 @@ new const AUTHOR[] = "gyxoBka"
 	#include <re_warmup_api>
 	new g_iFwdWarmupStart, g_iFwdWarmupEnd
 #else
-	enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MENU, RANDOM_WEAPON }
+	enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MODE, RANDOM_WEAPON }
 #endif
 
 #define TASK_RESPAWN_ID		13232
@@ -97,7 +97,7 @@ new mp_round_infinite, mp_roundrespawn_time, mp_freezetime, mp_refill_bpammo_wea
 new g_iCountdown, g_iMsgHookRoundTime, g_iHudSync
 new g_pCvarWarmupTime, g_pCvarWarmupMode, bool:g_bFristRestart, bool:g_bWarmupStarted
 new g_iMsgIdScenarioIcon, g_iMsgIdRoundTime, g_iMsgIdBarTime, g_iMsgIdStatusIcon
-new WarmupModes:g_iWarmupMode, g_iEquipMenuID
+new WarmupModes:g_iWarmupMode, g_iEquipMenuID, g_iTotalWeapons
 
 new const g_szWeaponName[any:WEAPON_P90+1][] = {
 	"","weapon_p228","","weapon_scout","weapon_hegrenade","weapon_xm1014","weapon_c4",
@@ -107,12 +107,19 @@ new const g_szWeaponName[any:WEAPON_P90+1][] = {
 	"weapon_flashbang","weapon_deagle","weapon_sg552","weapon_ak47","weapon_knife","weapon_p90"
 }
 
+new const g_szModes[WarmupModes][] = {
+	"Free Buy",
+	"Only Knife",
+	"Equip Mode",
+	"Random Weapon"
+}
+
 public plugin_pause()
 {
 	if(g_bWarmupStarted)
 	{
 		// back_cvar_values()
-		WarmupEnd(.bRestart = false, .bNotify = false)
+		WarmupEnd(.bSvRestart = false, .bNotify = false)
 	}
 }
 
@@ -137,16 +144,15 @@ public NativeGetWarmupState(iPlugin, iParams)
 	return bool:g_bWarmupStarted
 }
 
-public NativeGetWarmupMode(iPlugin, iParams)
+public WarmupModes:NativeGetWarmupMode(iPlugin, iParams)
 {
-	return any:g_iWarmupMode
+	return g_iWarmupMode
 }
 
 public NativeSetWarmupMode(iPlugin, iParams)
 {
-	g_iWarmupMode = WarmupModes:get_param(1)
-	new iNum = get_param(2)
-	(iNum <= 0) ? WarmupEnd(.bRestart = true, .bNotify = true) : WarmupStart(iNum)
+	new iTime = get_param(2)
+	(iTime <= 0) ? WarmupEnd(.bSvRestart = true, .bNotify = true) : WarmupStart(WarmupModes:clamp(get_param(1), 0, 4), iTime)
 #endif
 }
 
@@ -164,7 +170,7 @@ public plugin_init()
 	DisableHookChain(g_hChainList[ChooseAppearance] = RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true))
 
 	g_pCvarWarmupTime = register_cvar("warmup_time", "120")
-	g_pCvarWarmupMode = register_cvar("warmup_mode", "2")
+	g_pCvarWarmupMode = register_cvar("warmup_mode", "4")
 #if defined USE_API
 	g_iFwdWarmupStart = CreateMultiForward("WarmupStarted", ET_STOP, FP_CELL, FP_CELL)
 	g_iFwdWarmupEnd = CreateMultiForward("WarmupEnded", ET_IGNORE)
@@ -184,30 +190,6 @@ public plugin_init()
 	buildmenu()
 }
 
-buildmenu()
-{
-	g_iEquipMenuID = menu_create("Weapons Menu", "WeaponMenuHandler")
-	menu_setprop(g_iEquipMenuID, MPROP_EXIT, MEXIT_NEVER)
-	menu_setprop(g_iEquipMenuID, MPROP_PERPAGE, 0)
-	menu_setprop(g_iEquipMenuID, MPROP_NUMBER_COLOR, "\y")
-
-	new szNum[3], i
-	for(i = 1; i < sizeof(g_eWeapons); i++)
-	{
-		num_to_str(i, szNum, charsmax(szNum))
-		menu_additem(g_iEquipMenuID, g_eWeapons[i][szMenuItemName], szNum)
-		if(i >= 9) break
-	}
-}
-
-back_cvar_values()
-{
-	set_cvar_num("mp_round_infinite", mp_round_infinite)
-	set_cvar_num("mp_roundrespawn_time", mp_roundrespawn_time)
-	set_cvar_num("mp_freezetime", mp_freezetime)
-	set_cvar_num("mp_refill_bpammo_weapons", mp_refill_bpammo_weapons)
-}
-
 public ConCmd_WarmupStart(id, level)
 {
 	if(~get_user_flags(id) & level)
@@ -217,13 +199,13 @@ public ConCmd_WarmupStart(id, level)
 
 	if(read_argc() < 2)
 	{
-		WarmupStart(get_pcvar_num(g_pCvarWarmupTime))
+		WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), get_pcvar_num(g_pCvarWarmupTime))
 	}else{
-		new szArg[5], iNum = 0
+		new szArg[5]
 		read_argv(1, szArg, charsmax(szArg))
+		new iTime = str_to_num(szArg)
 
-		iNum = str_to_num(szArg)
-		(iNum <= 0) ? WarmupEnd(.bRestart = true, .bNotify = true) : WarmupStart(iNum)
+		(iTime <= 0) ? WarmupEnd(.bSvRestart = true, .bNotify = true) : WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), iTime)
 	}
 
 	return PLUGIN_HANDLED
@@ -242,12 +224,12 @@ public EventGameCommencing()
 {
 	if(!g_bFristRestart)
 	{
-		WarmupStart(get_pcvar_num(g_pCvarWarmupTime))
+		WarmupStart(WarmupModes:clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 4), get_pcvar_num(g_pCvarWarmupTime))
 		g_bFristRestart = true
 	}
 }
 
-public WarmupStart(iWarmupTime)
+public WarmupStart(WarmupModes:iMode, iWarmupTime)
 {
 	if(g_bWarmupStarted)
 	{
@@ -255,18 +237,14 @@ public WarmupStart(iWarmupTime)
 		return 0
 	}
 
-	switch(clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 3))
+	switch(iMode)
 	{
-		case 0: g_iWarmupMode = FREE_BUY
-		case 1: g_iWarmupMode = ONLY_KNIFE
-		case 2: g_iWarmupMode = EQUIP_MENU
-		case 3: g_iWarmupMode = RANDOM_WEAPON
-		/* 
-		default:{
-			server_print("[AMXX] WARNING: Wrong value ^"warmup_mode^" ^"%d^"", g_iWarmupMode)
-			g_iWarmupMode = FREE_BUY
-		} 
-		*/
+		case FREE_BUY: g_iWarmupMode = FREE_BUY
+		case ONLY_KNIFE: g_iWarmupMode = ONLY_KNIFE
+		case EQUIP_MODE: g_iWarmupMode = CheckCountArray(EQUIP_MODE) ? EQUIP_MODE : FREE_BUY
+		case RANDOM_WEAPON: g_iWarmupMode = CheckCountArray(RANDOM_WEAPON) ? RANDOM_WEAPON : FREE_BUY
+		case 4: g_iWarmupMode = GetRandomMode()
+		// default: return 0 // used clamp
 	}
 #if defined USE_API
 	new iRet
@@ -278,7 +256,7 @@ public WarmupStart(iWarmupTime)
 #endif
 
 	if(!g_iMsgHookRoundTime)
-		g_iMsgHookRoundTime = register_message( g_iMsgIdRoundTime, "Message_RoundTime" )
+		g_iMsgHookRoundTime = register_message(g_iMsgIdRoundTime, "Message_RoundTime")
 
 	EnableHookChain(g_hChainList[Spawn])
 	EnableHookChain(g_hChainList[Killed])
@@ -309,7 +287,7 @@ public WarmupStart(iWarmupTime)
 	return 1
 }
 
-public WarmupEnd(bool:bRestart, bool:bNotify)
+public WarmupEnd(bool:bSvRestart, bool:bNotify)
 {
 	if(!g_bWarmupStarted)
 	{
@@ -348,7 +326,7 @@ public WarmupEnd(bool:bRestart, bool:bNotify)
 #endif
 	remove_task(TASK_STATE_ID)
 	g_bWarmupStarted = false
-	if(bRestart)
+	if(bSvRestart)
 		server_cmd("sv_restart 1")
 
 	return 1
@@ -358,11 +336,11 @@ public TaskCountdownRestart()
 {
 	if(--g_iCountdown == 0)
 	{
-		WarmupEnd(.bRestart = true, .bNotify = false)
+		WarmupEnd(.bSvRestart = true, .bNotify = false)
 		set_task(2.0, "EndHud")
 	}else{
 		set_hudmessage(HUD_COLOR_RGB, HUD_MSG_POS, .effects = 1, .holdtime = 1.0)
-		ShowSyncHudMsg(0, g_iHudSync, "[Режим Разминки]")
+		ShowSyncHudMsg(0, g_iHudSync, "[Разминка | Режим: %s]", g_szModes[g_iWarmupMode])
 		// set_member_game(m_fRoundCount, get_gametime())
 	}
 }
@@ -468,13 +446,13 @@ public CBasePlayer_Spawn(id)
 			set_entvar(id, var_health, KNIFE_MODE_SET_HEALTH.0)
 		#endif
 		}
-		case EQUIP_MENU:{
-			new i, iCount = (sizeof(g_eWeapons)-1)
-			if(iCount <= 2)
+		case EQUIP_MODE:{
+			if(g_iTotalWeapons <= 2)
 			{
+				new i
 				for(i = 1; i < sizeof(g_eWeapons); i++)
 				{
-					if(iCount == 1 || iUserTeam == g_eWeapons[i][iTeam] || TEAM_ALL == g_eWeapons[i][iTeam])
+					if(g_iTotalWeapons == 1 || iUserTeam == g_eWeapons[i][iTeam] || TEAM_ALL == g_eWeapons[i][iTeam])
 					{
 						GiveWeapon(id, i)
 					}
@@ -534,6 +512,60 @@ public EndProtection(TaskID)
 #endif
 }
 
+
+// functions
+buildmenu()
+{
+	g_iEquipMenuID = menu_create("Weapons Menu", "WeaponMenuHandler")
+	menu_setprop(g_iEquipMenuID, MPROP_EXIT, MEXIT_NEVER)
+	menu_setprop(g_iEquipMenuID, MPROP_PERPAGE, 0)
+	menu_setprop(g_iEquipMenuID, MPROP_NUMBER_COLOR, "\y")
+
+	new szNum[3], i
+	for(i = 1; i < sizeof(g_eWeapons); i++)
+	{
+		num_to_str(i, szNum, charsmax(szNum))
+		menu_additem(g_iEquipMenuID, g_eWeapons[i][szMenuItemName], szNum)
+		g_iTotalWeapons++
+		if(i >= 9) break
+	}
+}
+
+back_cvar_values()
+{
+	set_cvar_num("mp_round_infinite", mp_round_infinite)
+	set_cvar_num("mp_roundrespawn_time", mp_roundrespawn_time)
+	set_cvar_num("mp_freezetime", mp_freezetime)
+	set_cvar_num("mp_refill_bpammo_weapons", mp_refill_bpammo_weapons)
+}
+
+WarmupModes:GetRandomMode()
+{
+	new WarmupModes:iRand = WarmupModes:random_num(0, 3)
+	switch(iRand)
+	{
+		case 2: iRand = CheckCountArray(EQUIP_MODE) ? EQUIP_MODE : FREE_BUY
+		case 3: iRand = CheckCountArray(RANDOM_WEAPON) ? RANDOM_WEAPON : FREE_BUY
+	}
+	return iRand
+}
+
+bool:CheckCountArray(WarmupModes:iMode)
+{
+	if(iMode == EQUIP_MODE && g_iTotalWeapons < 1)
+	{
+		server_print("[WARMUP] WARNING: Empty array g_eWeapons! Will be used ^"Free Buy^" mode!")
+		return false
+	}
+	if(iMode == RANDOM_WEAPON && g_iTotalWeapons < 2)
+	{
+		server_print("[WARMUP] WARNING: Need more weapons for randomness mode! Will be used ^"Free Buy^" mode!")
+		return false
+	}
+	return true
+}
+
+// stocks
 stock GiveWeapon(id, iIndex)
 {
 	new iId = g_eWeapons[iIndex][iWeaponID]
@@ -543,7 +575,7 @@ stock GiveWeapon(id, iIndex)
 
 stock GiveRandomWeapon(id)
 {
-	new iIndex = random_num(1, (sizeof(g_eWeapons)-1))
+	new iIndex = random_num(1, g_iTotalWeapons)
 	GiveWeapon(id, iIndex)
 }
 

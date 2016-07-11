@@ -14,7 +14,7 @@ new const BUYZONE[] = "func_buyzone"
 
 public plugin_init()
 {
-	register_plugin("Warmup Spawn Random", "0.0.2", "Avalanche | Vaqtincha")
+	register_plugin("Warmup Spawn Random", "0.0.3", "Avalanche | Vaqtincha")
 	g_pCvarWarmupRandom = register_cvar("warmup_random_spawn", "1")
 	DisableHookChain(g_hPlayerSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true))
 	readspawns()
@@ -35,26 +35,12 @@ public WarmupEnded()
 	if(g_hPlayerSpawn)
 		DisableHookChain(g_hPlayerSpawn)
 
-	plugin_pause()	
-}
-
-CreateBuyZone()
-{
-	new iEnt = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, BUYZONE))
-	dllfunc(DLLFunc_Spawn, iEnt)
-	engfunc(EngFunc_SetSize, iEnt, {-8191.0, -8191.0, -8191.0}, {8191.0, 8191.0, 8191.0})
-	engfunc(EngFunc_SetOrigin, iEnt, Float:{0.0, 0.0, 0.0})
-	set_pev(iEnt, pev_iuser1, CUSTOM_BUYZONE)
+	RemoveBuyZone()
 }
 
 public plugin_pause()
 {
-	new iEnt = FM_NULLENT
-	while((iEnt = engfunc(EngFunc_FindEntityByString, iEnt, "classname", BUYZONE)) > 0)
-	{
-		if(pev(iEnt, pev_iuser1) == CUSTOM_BUYZONE)
-			engfunc(EngFunc_RemoveEntity, iEnt)
-	}
+	RemoveBuyZone()
 }
 
 public CBasePlayer_Spawn(id)
@@ -111,11 +97,11 @@ readspawns()
 
 			if(g_iSpawnCount >= MAX_SPAWNS) break
 		}
-		server_print("[CSDM] Loaded %d spawn points for map %s", g_iSpawnCount, MapName)
+		server_print("[WARMUP] Loaded %d spawn points for map %s", g_iSpawnCount, MapName)
 		if(fp) fclose(fp)
 	}// collect regular, boring spawns
 	else{
-		server_print("[CSDM] No spawn points file found %s", MapName)
+		server_print("[WARMUP] No spawn points file found %s", MapName)
 	}
 }
 
@@ -181,6 +167,25 @@ do_random_spawn(id)
 	vecHolder[2] = g_flSpawns[sp_index][8]
 	set_pev(id,pev_v_angle,vecHolder)
 	set_pev(id,pev_fixangle,1)
+}
+
+RemoveBuyZone()
+{
+	new iEnt = FM_NULLENT
+	while((iEnt = engfunc(EngFunc_FindEntityByString, iEnt, "classname", BUYZONE)) > 0)
+	{
+		if(pev(iEnt, pev_iuser1) == CUSTOM_BUYZONE)
+			engfunc(EngFunc_RemoveEntity, iEnt)
+	}
+}
+
+CreateBuyZone()
+{
+	new iEnt = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, BUYZONE))
+	dllfunc(DLLFunc_Spawn, iEnt)
+	engfunc(EngFunc_SetSize, iEnt, {-8191.0, -8191.0, -8191.0}, {8191.0, 8191.0, 8191.0})
+	engfunc(EngFunc_SetOrigin, iEnt, Float:{0.0, 0.0, 0.0})
+	set_pev(iEnt, pev_iuser1, CUSTOM_BUYZONE)
 }
 
 stock str_count(str[], searchchar)

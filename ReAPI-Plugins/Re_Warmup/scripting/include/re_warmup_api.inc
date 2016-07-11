@@ -12,7 +12,10 @@
 	#pragma library re_warmup_api
 #endif
 
-enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MENU, RANDOM_WEAPON }
+enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MODE, RANDOM_WEAPON }
+
+
+//******** Natives ********
 
 /** Return true is Warmup Started
  */
@@ -36,8 +39,12 @@ native WarmupModes:GetWarmupMode()
  */
 native SetWarmupMode(WarmupModes:iMode, iTime)
 
+
+//******** Forwards ******** 
+
 /** stop on PLUGIN_HANDLED */
 forward WarmupStarted(WarmupModes:iMode, iTime)
+
 
 forward WarmupEnded()
 
