@@ -95,7 +95,7 @@ new HookChain:g_hChainList[Forwards], bool:g_bIsUserBot[MAX_CLIENTS+1], bool:g_b
 new mp_round_infinite, mp_roundrespawn_time, mp_freezetime, mp_refill_bpammo_weapons
 
 new g_iCountdown, g_iMsgHookRoundTime, g_iHudSync
-new g_pCvarWarmupTime, g_pCvarWarmupMode, bool:g_bFristRestart
+new g_pCvarWarmupTime, g_pCvarWarmupMode, bool:g_bFristRestart, bool:g_bWarmupStarted
 new g_iMsgIdScenarioIcon, g_iMsgIdRoundTime, g_iMsgIdBarTime, g_iMsgIdStatusIcon
 new WarmupModes:g_iWarmupMode, g_iEquipMenuID
 
@@ -109,7 +109,11 @@ new const g_szWeaponName[any:WEAPON_P90+1][] = {
 
 public plugin_pause()
 {
-	back_cvar_values()
+	if(g_bWarmupStarted)
+	{
+		// back_cvar_values()
+		WarmupEnd(.bRestart = false, .bNotify = false)
+	}
 }
 
 public plugin_end()
@@ -123,8 +127,14 @@ public plugin_end()
 public plugin_natives()
 {
 	register_library("re_warmup_api")
+	register_native("GetWarmupState", "NativeGetWarmupState")
 	register_native("GetWarmupMode", "NativeGetWarmupMode")
 	register_native("SetWarmupMode", "NativeSetWarmupMode")
+}
+
+public NativeGetWarmupState(iPlugin, iParams)
+{
+	return bool:g_bWarmupStarted
 }
 
 public NativeGetWarmupMode(iPlugin, iParams)
@@ -136,9 +146,7 @@ public NativeSetWarmupMode(iPlugin, iParams)
 {
 	g_iWarmupMode = WarmupModes:get_param(1)
 	new iNum = get_param(2)
-	(iNum <= 0) ? WarmupEnd() : WarmupStart(iNum)
-
-	server_cmd("sv_restart 1")
+	(iNum <= 0) ? WarmupEnd(.bRestart = true, .bNotify = true) : WarmupStart(iNum)
 #endif
 }
 
@@ -155,7 +163,7 @@ public plugin_init()
 	DisableHookChain(g_hChainList[GiveC4] = RegisterHookChain(RG_CSGameRules_GiveC4, "CSGameRules_GiveC4", .post = false))
 	DisableHookChain(g_hChainList[ChooseAppearance] = RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true))
 
-	g_pCvarWarmupTime = register_cvar("warmup_time", "60")
+	g_pCvarWarmupTime = register_cvar("warmup_time", "120")
 	g_pCvarWarmupMode = register_cvar("warmup_mode", "2")
 #if defined USE_API
 	g_iFwdWarmupStart = CreateMultiForward("WarmupStarted", ET_STOP, FP_CELL, FP_CELL)
@@ -215,9 +223,8 @@ public ConCmd_WarmupStart(id, level)
 		read_argv(1, szArg, charsmax(szArg))
 
 		iNum = str_to_num(szArg)
-		(iNum <= 0) ? WarmupEnd() : WarmupStart(iNum)
+		(iNum <= 0) ? WarmupEnd(.bRestart = true, .bNotify = true) : WarmupStart(iNum)
 	}
-	server_cmd("sv_restart 1")
 
 	return PLUGIN_HANDLED
 }
@@ -242,6 +249,12 @@ public EventGameCommencing()
 
 public WarmupStart(iWarmupTime)
 {
+	if(g_bWarmupStarted)
+	{
+		server_print("Warmup already started!")
+		return 0
+	}
+
 	switch(clamp(get_pcvar_num(g_pCvarWarmupMode), 0, 3))
 	{
 		case 0: g_iWarmupMode = FREE_BUY
@@ -260,9 +273,10 @@ public WarmupStart(iWarmupTime)
 	ExecuteForward(g_iFwdWarmupStart, iRet, g_iWarmupMode, iWarmupTime)
 	if(iRet == PLUGIN_HANDLED)
 	{
-		return
+		return 0
 	}
 #endif
+
 	if(!g_iMsgHookRoundTime)
 		g_iMsgHookRoundTime = register_message( g_iMsgIdRoundTime, "Message_RoundTime" )
 
@@ -289,10 +303,21 @@ public WarmupStart(iWarmupTime)
 
 	remove_task(TASK_STATE_ID)
 	set_task(1.0, "TaskCountdownRestart", TASK_STATE_ID, _, _, "a", g_iCountdown)
+	g_bWarmupStarted = true
+	server_cmd("sv_restart 1")
+
+	return 1
 }
 
-public WarmupEnd()
+public WarmupEnd(bool:bRestart, bool:bNotify)
 {
+	if(!g_bWarmupStarted)
+	{
+		if(bNotify)
+			server_print("Warmup NOT started!")
+		return 0
+	}
+
 	unregister_message(g_iMsgIdRoundTime, g_iMsgHookRoundTime)
 	show_menu(0, 0, "^n", 1)  // thaks a2
 
@@ -322,14 +347,18 @@ public WarmupEnd()
 	ExecuteForward(g_iFwdWarmupEnd, iRet)
 #endif
 	remove_task(TASK_STATE_ID)
+	g_bWarmupStarted = false
+	if(bRestart)
+		server_cmd("sv_restart 1")
+
+	return 1
 }
 
 public TaskCountdownRestart()
 {
 	if(--g_iCountdown == 0)
 	{
-		WarmupEnd()
-		server_cmd("sv_restart 1")
+		WarmupEnd(.bRestart = true, .bNotify = false)
 		set_task(2.0, "EndHud")
 	}else{
 		set_hudmessage(HUD_COLOR_RGB, HUD_MSG_POS, .effects = 1, .holdtime = 1.0)
@@ -340,7 +369,7 @@ public TaskCountdownRestart()
 
 public EndHud()
 {
-	set_hudmessage(HUD_COLOR_RGB, -1.0, 0.3, .holdtime = 5.0)
+	set_hudmessage(HUD_COLOR_RGB, -1.0, 0.3, .holdtime = 4.0)
 	ShowSyncHudMsg(0, g_iHudSync, "СПАСИБО ЗА РАЗМИНКУ!^nПРИЯТНОЙ ИГРЫ!")
 }
 

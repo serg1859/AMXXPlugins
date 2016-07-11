@@ -14,6 +14,10 @@
 
 enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MENU, RANDOM_WEAPON }
 
+/** Return true is Warmup Started
+ */
+native bool:GetWarmupState()
+
 /**
  * Gets Warmup Mode
  *
@@ -36,3 +40,6 @@ native SetWarmupMode(WarmupModes:iMode, iTime)
 forward WarmupStarted(WarmupModes:iMode, iTime)
 
 forward WarmupEnded()
+
+
+
