@@ -19,24 +19,23 @@ update: 0.9 (wopox1337)
 	Спасибо Safety1st за плагин Uncommon Knife Warmup, некоторые идеи были взяты у него.
 **/
 
-// #pragma semicolon 1
-
 #include <amxmodx>
 #include <hamsandwich>
 #include <reapi>
 
-enum _:WEAPON_DATA { szMenuItemName[64], any:iWeaponID,	iAmmo }
+enum _:WEAPON_DATA { szMenuItemName[64], any:iWeaponID,	iAmmo, any:iTeam }
+const TEAM_ALL = 4
 
 
-/*---------------EDIT ME------------------*/
+/**■■■■■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG START ■■■■■■■■■■■■■■■■■■■■■■■■■■■■*/
 
 #define RESPAWN_TIME 		1				// через сколько секунд игрок возродится
 #define PROTECTION_TIME 	2				// сколько секунд действует защита после возрождения
 
 // #define KNIFE_MODE_SET_HEALTH 	32		// 
 
-//#define RESPAWN_BAR						// закомментируйте, чтобы не показывать полосу после смерти
-#define PROTECTION_BAR						// закомментируйте, чтобы не показывать полосу во время защиты
+// #define RESPAWN_BAR						// закомментируйте, чтобы не показывать полосу после смерти
+#define PROTECTION_ICON						// закомментируйте, чтобы не показывать иконку во время защиты
 
 #define HUD_COLOR_RGB 		67, 218, 231	// цвет RGB худа
 #define HUD_MSG_POS 		-1.0, 0.90		// Позиция HUD сообщения о разминке
@@ -45,26 +44,31 @@ enum _:WEAPON_DATA { szMenuItemName[64], any:iWeaponID,	iAmmo }
 #define BLUE_TEAM_COLOUR   	0, 0, 255		// цвет RGB во время защиты для CT ( рендеринг )
 #define GLOW_THICK         	10				// "Плотность" цвета защиты
 
-new g_eMenuData[][WEAPON_DATA] = { /* Эту НЕ ТРОГАЙ! :D */ {"", 0, 0}
-	/** FORMAT: "Menu Name" "Weapon ID" "BackPack Ammo" */
+#define NODRAW_CORPSES						// 
+ 
 
-	// ,{"IMI Galil", WEAPON_GALIL, 90}
-	// ,{"GIAT FAMAS", WEAPON_FAMAS, 90}
-	,{"AK-47", WEAPON_AK47, 90}
-	,{"Colt M4A1", WEAPON_M4A1, 90}
-	// ,{"Steyr Scout", WEAPON_SCOUT, 90}
-	// ,{"AI Arctic Warfare Magnum", WEAPON_AWP, 30}
-	// ,{"FN Minimi M249 Para", WEAPON_M249, 200}
-	// ,{"MP5 Navy", WEAPON_MP5N, 120}
-	,{"Desert Eagle", WEAPON_DEAGLE, 35}
+/** FORMAT: "Menu Name" "Weapon ID" "BackPack Ammo" "Team" */
+
+new g_eWeapons[][WEAPON_DATA] = { /* Эту НЕ ТРОГАЙ! :D */ {"", 0, 0, 0}
+
+	// ,{"IMI Galil", WEAPON_GALIL, 90, TEAM_TERRORIST}
+	// ,{"GIAT FAMAS", WEAPON_FAMAS, 90, TEAM_CT}
+	,{"AK-47", WEAPON_AK47, 90, TEAM_TERRORIST}
+	,{"Colt M4A1", WEAPON_M4A1, 90, TEAM_CT}
+	// ,{"Steyr Scout", WEAPON_SCOUT, 90, TEAM_ALL}
+	// ,{"AI Arctic Warfare Magnum", WEAPON_AWP, 30, TEAM_ALL}
+	// ,{"FN Minimi M249 Para", WEAPON_M249, 200, TEAM_ALL}
+	// ,{"MP5 Navy", WEAPON_MP5N, 120, TEAM_ALL}
+	// ,{"Desert Eagle", WEAPON_DEAGLE, 35, TEAM_ALL}
 }
 
-// #define USE_API
-/*----------------------------------------*/
+#define USE_API
 
-new const PLUGIN[] = "Re WarmUp";
-new const VERSION[] = "0.9a";
-new const AUTHOR[] = "gyxoBka";
+/**■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG END ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■*/
+
+new const PLUGIN[] = "Re WarmUp"
+new const VERSION[] = "0.9a"
+new const AUTHOR[] = "gyxoBka"
 
 #if defined USE_API
 	#include <re_warmup_api>
@@ -73,21 +77,26 @@ new const AUTHOR[] = "gyxoBka";
 	enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MENU, RANDOM_WEAPON }
 #endif
 
-#define SetBit(%1)			(g_bBotUser |=  (1<<(%1 & 31)))
-#define ClearBit(%1)		(g_bBotUser &= ~(1<<(%1 & 31)))
-#define IsUserBot(%1)		(g_bBotUser & (1<<(%1 & 31)))
-
 #define TASK_RESPAWN_ID		13232
 #define TASK_PROTECTION_ID	33464
 #define TASK_STATE_ID		59737
 
-new bool:g_bGameCommencing;
-new g_iDefaultRoundInfinite, g_iDefaultRespawnTime, g_iDefaultFreezeTime;
-new HookChain:RegHookSpawn, HookChain:RegHookKilled, HookChain:RegHookDeadPlayer, HookChain:RegHookGiveC4, HookChain:RegHookChooseAppearance
+enum Forwards
+{
+	HookChain:Spawn,
+	HookChain:Killed,
+	HookChain:DeadPlayerWeapons,
+	HookChain:GiveC4,
+	HookChain:ChooseAppearance
+}
 
-new g_iCountdown, g_HudSync, g_MsgBarTime, g_bBotUser
-new g_pCvarWarmupTime, g_pCvarWarmupMode
-new g_MsgIDScenarioIcon, g_MsgIDRoundTime, g_MsgHookRoundTime
+new HookChain:g_hChainList[Forwards], bool:g_bIsUserBot[MAX_CLIENTS+1], bool:g_bFirstSpawn[MAX_CLIENTS+1]
+// old cvar values
+new mp_round_infinite, mp_roundrespawn_time, mp_freezetime, mp_refill_bpammo_weapons
+
+new g_iCountdown, g_iMsgHookRoundTime, g_iHudSync
+new g_pCvarWarmupTime, g_pCvarWarmupMode, bool:g_bFristRestart
+new g_iMsgIdScenarioIcon, g_iMsgIdRoundTime, g_iMsgIdBarTime, g_iMsgIdStatusIcon
 new WarmupModes:g_iWarmupMode, g_iEquipMenuID
 
 new const g_szWeaponName[any:WEAPON_P90+1][] = {
@@ -100,9 +109,7 @@ new const g_szWeaponName[any:WEAPON_P90+1][] = {
 
 public plugin_end()
 {
-	set_cvar_num("mp_round_infinite", g_iDefaultRoundInfinite)
-	set_cvar_num("mp_roundrespawn_time", g_iDefaultRespawnTime)
-	set_cvar_num("mp_freezetime", g_iDefaultFreezeTime)
+	back_cvar_values()
 #if defined USE_API
 	DestroyForward(g_iFwdWarmupStart)
 	DestroyForward(g_iFwdWarmupEnd)
@@ -132,32 +139,35 @@ public NativeSetWarmupMode(iPlugin, iParams)
 
 public plugin_init()
 {
-	register_plugin(PLUGIN, VERSION, AUTHOR);
-	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing");
-	register_cvar( "rewarmup", VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED );
-	register_concmd("warmup_start", "ConCmd_WarmupStart", ADMIN_CFG, "< time | 0 = off >")
+	register_plugin(PLUGIN, VERSION, AUTHOR)
+	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing")
+	register_cvar("rewarmup", VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED )
+	register_concmd("warmup_set", "ConCmd_WarmupStart", ADMIN_CFG, "< time | 0 = off >")
 
-	DisableHookChain(RegHookSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true));
-	DisableHookChain(RegHookKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", .post = true));
-	DisableHookChain(RegHookDeadPlayer = RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", .post = false));
-	DisableHookChain(RegHookGiveC4 = RegisterHookChain(RG_CSGameRules_GiveC4, "CSGameRules_GiveC4", .post = false));
-	DisableHookChain(RegHookChooseAppearance = RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true));
+	DisableHookChain(g_hChainList[Spawn] = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true))
+	DisableHookChain(g_hChainList[Killed] = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", .post = true))
+	DisableHookChain(g_hChainList[DeadPlayerWeapons] = RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", .post = false))
+	DisableHookChain(g_hChainList[GiveC4] = RegisterHookChain(RG_CSGameRules_GiveC4, "CSGameRules_GiveC4", .post = false))
+	DisableHookChain(g_hChainList[ChooseAppearance] = RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true))
 
-	g_pCvarWarmupTime = register_cvar("warmup_time", "60");
-	g_pCvarWarmupMode = register_cvar("warmup_mode", "1");
+	g_pCvarWarmupTime = register_cvar("warmup_time", "60")
+	g_pCvarWarmupMode = register_cvar("warmup_mode", "1")
 #if defined USE_API
-	g_iFwdWarmupStart = CreateMultiForward("WarmupStarted", ET_IGNORE)
+	g_iFwdWarmupStart = CreateMultiForward("WarmupStarted", ET_STOP, FP_CELL, FP_CELL)
 	g_iFwdWarmupEnd = CreateMultiForward("WarmupEnded", ET_IGNORE)
 #endif
-	g_iDefaultRespawnTime = get_cvar_num("mp_roundrespawn_time");
-	g_iDefaultRoundInfinite = get_cvar_num("mp_round_infinite");
-	g_iDefaultFreezeTime = get_cvar_num("mp_freezetime");
 
-	g_MsgIDScenarioIcon = get_user_msgid( "Scenario" );
-	g_MsgIDRoundTime = get_user_msgid( "RoundTime" );
-	g_MsgBarTime = get_user_msgid( "BarTime" );	
+	mp_roundrespawn_time = get_cvar_num("mp_roundrespawn_time")
+	mp_round_infinite = get_cvar_num("mp_round_infinite")
+	mp_freezetime = get_cvar_num("mp_freezetime")
+	mp_refill_bpammo_weapons = get_cvar_num("mp_refill_bpammo_weapons")
 
-	g_HudSync = CreateHudSyncObj()
+	g_iMsgIdScenarioIcon = get_user_msgid("Scenario")
+	g_iMsgIdRoundTime = get_user_msgid("RoundTime")
+	g_iMsgIdBarTime = get_user_msgid("BarTime")
+	g_iMsgIdStatusIcon = get_user_msgid("StatusIcon")
+
+	g_iHudSync = CreateHudSyncObj()
 	buildmenu()
 }
 
@@ -169,12 +179,20 @@ buildmenu()
 	menu_setprop(g_iEquipMenuID, MPROP_NUMBER_COLOR, "\y")
 
 	new szNum[3], i
-	for(i = 1; i < sizeof(g_eMenuData); i++)
+	for(i = 1; i < sizeof(g_eWeapons); i++)
 	{
 		num_to_str(i, szNum, charsmax(szNum))
-		menu_additem(g_iEquipMenuID, g_eMenuData[i][szMenuItemName], szNum)
+		menu_additem(g_iEquipMenuID, g_eWeapons[i][szMenuItemName], szNum)
 		if(i >= 9) break
 	}
+}
+
+back_cvar_values()
+{
+	set_cvar_num("mp_round_infinite", mp_round_infinite)
+	set_cvar_num("mp_roundrespawn_time", mp_roundrespawn_time)
+	set_cvar_num("mp_freezetime", mp_freezetime)
+	set_cvar_num("mp_refill_bpammo_weapons", mp_refill_bpammo_weapons)
 }
 
 public ConCmd_WarmupStart(id, level)
@@ -201,23 +219,19 @@ public ConCmd_WarmupStart(id, level)
 
 public client_putinserver(id) 
 {
-	is_user_bot(id) ? SetBit(id) : ClearBit(id)
-}
-
-public client_disconnect(id) 
-{
-	remove_task(id + TASK_RESPAWN_ID);
-	remove_task(id + TASK_PROTECTION_ID);
-	ClearBit(id)
+	g_bIsUserBot[id] = bool:is_user_bot(id)
+	g_bFirstSpawn[id] = true
+	remove_task(id + TASK_RESPAWN_ID)
+	remove_task(id + TASK_PROTECTION_ID)
 }
 
 // Main
 public EventGameCommencing()
 {
-	if(!g_bGameCommencing)
+	if(!g_bFristRestart)
 	{
 		WarmupStart(get_pcvar_num(g_pCvarWarmupTime))
-		g_bGameCommencing = true
+		g_bFristRestart = true
 	}
 }
 
@@ -231,24 +245,30 @@ public WarmupStart(iWarmupTime)
 		case 3: g_iWarmupMode = RANDOM_WEAPON
 		/* 
 		default:{
-			server_print("[AMXX] WARNING: Wrong value ^"warmup_mode^" ^"%d^"", g_iWarmupMode) // 
+			server_print("[AMXX] WARNING: Wrong value ^"warmup_mode^" ^"%d^"", g_iWarmupMode)
 			g_iWarmupMode = FREE_BUY
 		} 
 		*/
 	}
-	// server_print("%d", g_iWarmupMode)
-	if(!g_MsgHookRoundTime)
+#if defined USE_API
+	new iRet
+	ExecuteForward(g_iFwdWarmupStart, iRet, g_iWarmupMode, iWarmupTime)
+	if(iRet == PLUGIN_HANDLED)
 	{
-		g_MsgHookRoundTime = register_message( g_MsgIDRoundTime, "Message_RoundTime" );
+		return
 	}
-	EnableHookChain(RegHookSpawn);
-	EnableHookChain(RegHookKilled);
-	EnableHookChain(RegHookGiveC4);
-	EnableHookChain(RegHookChooseAppearance);
+#endif
+	if(!g_iMsgHookRoundTime)
+		g_iMsgHookRoundTime = register_message( g_iMsgIdRoundTime, "Message_RoundTime" )
+
+	EnableHookChain(g_hChainList[Spawn])
+	EnableHookChain(g_hChainList[Killed])
+	EnableHookChain(g_hChainList[GiveC4])
+	EnableHookChain(g_hChainList[ChooseAppearance])
 
 	if(g_iWarmupMode != ONLY_KNIFE)
 	{
-		EnableHookChain(RegHookDeadPlayer)
+		EnableHookChain(g_hChainList[DeadPlayerWeapons])
 	}
 	if(g_iWarmupMode != FREE_BUY)
 	{
@@ -256,46 +276,41 @@ public WarmupStart(iWarmupTime)
 		set_member_game(m_bTCantBuy, true)
 	}
 
-	set_cvar_num("mp_roundrespawn_time", iWarmupTime);
-	set_cvar_num("mp_round_infinite", 1);
-	set_cvar_num("mp_freezetime", 0);
-	
-	g_iCountdown = iWarmupTime	
+	set_cvar_num("mp_roundrespawn_time", iWarmupTime)
+	set_cvar_num("mp_round_infinite", 1)
+	set_cvar_num("mp_freezetime", 0)
+	set_cvar_num("mp_refill_bpammo_weapons", 2)
+	g_iCountdown = iWarmupTime
+
 	remove_task(TASK_STATE_ID)
 	set_task(1.0, "TaskCountdownRestart", TASK_STATE_ID, _, _, "a", g_iCountdown)
-#if defined USE_API
-	new iRet
-	ExecuteForward(g_iFwdWarmupStart, iRet)
-#endif
 }
 
 public WarmupEnd()
 {
-	unregister_message( g_MsgIDRoundTime, g_MsgHookRoundTime );
-	g_MsgHookRoundTime = 0
-	g_iCountdown = 0
+	unregister_message(g_iMsgIdRoundTime, g_iMsgHookRoundTime)
 
-	DisableHookChain(RegHookSpawn);
-	DisableHookChain(RegHookKilled);
-	DisableHookChain(RegHookGiveC4);
-	DisableHookChain(RegHookChooseAppearance);
+	g_iMsgHookRoundTime = 0
+	g_iCountdown = 0
+	back_cvar_values()
+	SendStatusIcon(0)
+
+	DisableHookChain(g_hChainList[Spawn])
+	DisableHookChain(g_hChainList[Killed])
+	DisableHookChain(g_hChainList[GiveC4])
+	DisableHookChain(g_hChainList[ChooseAppearance])
 
 	if(g_iWarmupMode == ONLY_KNIFE)
 	{
 		SendScenarioIcon(0)
 	}else{
-		DisableHookChain(RegHookDeadPlayer)
+		DisableHookChain(g_hChainList[DeadPlayerWeapons])
 	}
 	if(g_iWarmupMode != FREE_BUY)
 	{
 		set_member_game(m_bCTCantBuy, false)
 		set_member_game(m_bTCantBuy, false)
 	}
-
-	set_cvar_num("mp_round_infinite", g_iDefaultRoundInfinite);
-	set_cvar_num("mp_roundrespawn_time", g_iDefaultRespawnTime);
-	set_cvar_num("mp_freezetime", g_iDefaultFreezeTime);
-
 #if defined USE_API
 	new iRet
 	ExecuteForward(g_iFwdWarmupEnd, iRet)
@@ -305,33 +320,30 @@ public WarmupEnd()
 
 public TaskCountdownRestart()
 {
-	switch(	--g_iCountdown )
+	if(--g_iCountdown == 0)
 	{
-		case 0:{
-			WarmupEnd()
-			server_cmd("sv_restart 1")
-			set_task( 2.0, "EndHud" )
-		}
-		default:{
-			set_hudmessage(HUD_COLOR_RGB, HUD_MSG_POS, .effects = 1, .holdtime = 1.0);
-			ShowSyncHudMsg(0, g_HudSync, "[Режим Разминки]");
-			// set_member_game(m_fRoundCount, get_gametime())
-		}
+		WarmupEnd()
+		server_cmd("sv_restart 1")
+		set_task( 2.0, "EndHud" )
+	}else{
+		set_hudmessage(HUD_COLOR_RGB, HUD_MSG_POS, .effects = 1, .holdtime = 1.0)
+		ShowSyncHudMsg(0, g_iHudSync, "[Режим Разминки]")
+		// set_member_game(m_fRoundCount, get_gametime())
 	}
 }
 
 public EndHud()
 {
-	set_hudmessage(HUD_COLOR_RGB, -1.0, 0.3, .holdtime = 5.0);
-	ShowSyncHudMsg(0, g_HudSync, "СПАСИБО ЗА РАЗМИНКУ!^nПРИЯТНОЙ ИГРЫ!");
+	set_hudmessage(HUD_COLOR_RGB, -1.0, 0.3, .holdtime = 5.0)
+	ShowSyncHudMsg(0, g_iHudSync, "СПАСИБО ЗА РАЗМИНКУ!^nПРИЯТНОЙ ИГРЫ!")
 }
 
-public Message_RoundTime( msgid, dest, receiver ) {
-	const ARG_TIME_REMAINING = 1;
-
+public Message_RoundTime(iMesgId, iMsgType, iMsgEnt) 
+{
+	const ARG_TIME_REMAINING = 1
 	/* Msg is sent at player spawn, Round_Start and during HUD initialization in UpdateClientData().
 	   Just fake the timer, it is easier than adjusting of 'mp_roundtime' cvar */
-	set_msg_arg_int( ARG_TIME_REMAINING, ARG_SHORT, g_iCountdown );
+	set_msg_arg_int(ARG_TIME_REMAINING, ARG_SHORT, g_iCountdown)
 }
 
 public WeaponMenuHandler(id, iMenu, iItem)
@@ -350,15 +362,15 @@ public WeaponMenuHandler(id, iMenu, iItem)
 }
 
 // CBasePlayer
-public CSGameRules_GiveC4() 
+public CSGameRules_GiveC4()
 {
 	SetHookChainReturn(ATYPE_INTEGER, 0)
-	return HC_SUPERCEDE; 
+	return HC_SUPERCEDE
 }
 
 public HandleMenu_ChooseAppearance(const index, const slot)
 {
-	if(1 <= slot <= 4/*only cstrike*/ && !is_user_alive(index))
+	if(1 <= slot <= 5/*only cstrike*/ && !is_user_alive(index) && !g_bFirstSpawn[index])
 	{
 		ExecuteHamB(Ham_CS_RoundRespawn, index)
 	}
@@ -366,140 +378,174 @@ public HandleMenu_ChooseAppearance(const index, const slot)
 
 public CSGameRules_DeadPlayerWeapons(const index)
 {
-	SetHookChainReturn(ATYPE_INTEGER, GR_PLR_DROP_GUN_NO);
-	return HC_SUPERCEDE;
+	SetHookChainReturn(ATYPE_INTEGER, GR_PLR_DROP_GUN_NO)
+	return HC_SUPERCEDE
 }
 
 public CBasePlayer_Killed(id, pevAttacker, iGib)
 {
-	set_task( RESPAWN_TIME.0, "Respawn", TASK_RESPAWN_ID + id );
+	set_task(RESPAWN_TIME.0, "Respawn", TASK_RESPAWN_ID + id)
+#if defined NODRAW_CORPSES
 	set_entvar(id, var_effects, EF_NODRAW)
-
-	client_print( id, print_center, "Через %d секунды Вы возродитесь", RESPAWN_TIME );
-
-#if defined RESPAWN_BAR
-	ShowBar(id, RESPAWN_TIME);
 #endif
 
-	return HC_CONTINUE;
+#if defined RESPAWN_BAR
+	ShowBar(id, RESPAWN_TIME)
+#else
+	client_print(id, print_center, "Через %d секунды Вы возродитесь", RESPAWN_TIME)
+#endif
 }
 
 public CBasePlayer_Spawn(id)
 {
 	set_member_game(m_fRoundCount, get_gametime())
 
-	if (!is_user_alive(id)) return HC_CONTINUE;
+	if(!is_user_alive(id)) 
+		return
 
-	SetProtection(id);
+	if(g_iWarmupMode != FREE_BUY)
+	{
+		rg_remove_all_items(id)
+		rg_give_item(id, "weapon_knife")
+	}
+
+	new iUserTeam = get_member(id, m_iTeam)
+	SetProtection(id, iUserTeam)
+	g_bFirstSpawn[id] = false
 
 	switch(g_iWarmupMode)
 	{
-		case FREE_BUY: rg_add_account(id, 16000, AS_SET, true);
+		case FREE_BUY: rg_add_account(id, 16000, AS_SET, true)
 		case ONLY_KNIFE:{
 			SendScenarioIcon(id)
 		#if defined KNIFE_MODE_SET_HEALTH
 			set_entvar(id, var_health, KNIFE_MODE_SET_HEALTH.0)
 		#endif
 		}
-		case EQUIP_MENU: IsUserBot(id) ? GiveRandomWeapon(id) : menu_display(id, g_iEquipMenuID, 0)
+		case EQUIP_MENU:{
+			new i, iCount = (sizeof(g_eWeapons)-1)
+			if(iCount <= 2)
+			{
+				for(i = 1; i < sizeof(g_eWeapons); i++)
+				{
+					if(iCount == 1 || iUserTeam == g_eWeapons[i][iTeam] || TEAM_ALL == g_eWeapons[i][iTeam])
+					{
+						GiveWeapon(id, i)
+					}
+				}
+			}else{
+				g_bIsUserBot[id] ? GiveRandomWeapon(id) : menu_display(id, g_iEquipMenuID, 0)
+			}
+		}
 		case RANDOM_WEAPON: GiveRandomWeapon(id)
-		// default: return HC_CONTINUE;
+		default: return
 	}
-	return HC_CONTINUE;
 }
 
 public Respawn(TaskID) 
 {
 	new id = TaskID - TASK_RESPAWN_ID
 
-	if(!is_user_connected(id)) return;
+	if(!is_user_connected(id)) 
+		return
 
 	if(TEAM_TERRORIST <= get_member(id, m_iTeam) <= TEAM_CT && !is_user_alive(id))
 	{
-		ExecuteHam(Ham_CS_RoundRespawn, id);
+		ExecuteHam(Ham_CS_RoundRespawn, id)
 	}
 }
 
-public SetProtection(id)
+public SetProtection(id, iUserTeam)
 {
-	set_entvar(id, var_takedamage, DAMAGE_NO);
-#if defined PROTECTION_BAR
-	ShowBar(id, PROTECTION_TIME);
+	set_entvar(id, var_takedamage, DAMAGE_NO)
+#if defined PROTECTION_ICON
+	SendStatusIcon(id, .status = 2)
 #endif
 #if defined GLOW_THICK
-	switch(get_member(id, m_iTeam))
+	switch(iUserTeam)
 	{
-		case TEAM_TERRORIST:{
-			rm_set_rendering( id, kRenderFxGlowShell, RED_TEAM_COLOUR, GLOW_THICK );
-			rg_remove_item(id, "weapon_glock18")
-		}
-		case TEAM_CT:{
-			rm_set_rendering( id, kRenderFxGlowShell, BLUE_TEAM_COLOUR, GLOW_THICK );
-			rg_remove_item(id, "weapon_usp")
-		}
+		case TEAM_TERRORIST: rm_set_rendering(id, kRenderFxGlowShell, RED_TEAM_COLOUR, GLOW_THICK)
+		case TEAM_CT: rm_set_rendering(id, kRenderFxGlowShell, BLUE_TEAM_COLOUR, GLOW_THICK )
 	}
 #endif
 
-	// client_print( id, print_center, "У Вас %d секунды на закупку", PROTECTION_TIME );
-
-	remove_task(TASK_PROTECTION_ID + id);
-	set_task( PROTECTION_TIME.0, "DisableProtection", TASK_PROTECTION_ID + id );
+	remove_task(TASK_PROTECTION_ID + id)
+	set_task( PROTECTION_TIME.0, "EndProtection", TASK_PROTECTION_ID + id)
 }
 
-public DisableProtection(TaskID)
+public EndProtection(TaskID)
 {
-	new id = TaskID - TASK_PROTECTION_ID;
-	if (!is_user_connected(id)) return;
+	new id = TaskID - TASK_PROTECTION_ID
 
-	set_entvar(id, var_takedamage, DAMAGE_AIM);
-	
+	if(!is_user_connected(id)) 
+		return
+
+	SendStatusIcon(id)
+	set_entvar(id, var_takedamage, DAMAGE_AIM)
+
 #if defined GLOW_THICK
-	rm_set_rendering( id );
+	rm_set_rendering(id) // reset
 #endif
 }
 
 stock GiveWeapon(id, iIndex)
 {
-	new iId = g_eMenuData[iIndex][iWeaponID]
-	rg_give_item(id, g_szWeaponName[iId])
-	rg_set_user_bpammo(id, WeaponIdType:iId, g_eMenuData[iIndex][iAmmo])
+	new iId = g_eWeapons[iIndex][iWeaponID]
+	rg_give_item(id, g_szWeaponName[iId], GT_REPLACE)
+	rg_set_user_bpammo(id, WeaponIdType:iId, g_eWeapons[iIndex][iAmmo])
 }
 
 stock GiveRandomWeapon(id)
 {
-	new iIndex = random_num(1, charsmax(g_eMenuData))
+	new iIndex = random_num(1, (sizeof(g_eWeapons)-1))
 	GiveWeapon(id, iIndex)
 }
 
 stock ShowBar(const id, const iTime)
 {
-	message_begin(MSG_ONE, g_MsgBarTime, _, id);
-	write_short(iTime);
-	message_end();
+	message_begin(MSG_ONE_UNRELIABLE, g_iMsgIdBarTime, .player = id)
+	write_short(iTime)
+	message_end()
 }
 
 stock SendScenarioIcon(id)
 {
-	const ICON_OFF 	= 0;
-	const ICON_ON  	= 1;
-	static const szKnifeIcon[] = "d_knife";
+	const ICON_OFF = 0
+	const ICON_ON = 1
 
 	if(id){
 		// to show icon I use per player msgs to make sure every player will get msg
-		message_begin(MSG_ONE, g_MsgIDScenarioIcon, _, id);
-		write_byte(ICON_ON);
-		write_string(szKnifeIcon);
-		write_byte(0);	// no alpha value
-		message_end();
+		message_begin(MSG_ONE, g_iMsgIdScenarioIcon, .player = id)
+		write_byte(ICON_ON)
+		write_string("d_knife") // sprite name in hud.txt
+		write_byte(0)	// no alpha value
+		message_end()
 	}else{
 		// it is 'global' msg that I use to hide icon only
-		message_begin(MSG_BROADCAST, g_MsgIDScenarioIcon);
-		write_byte(ICON_OFF);
-		message_end();
+		message_begin(MSG_BROADCAST, g_iMsgIdScenarioIcon)
+		write_byte(ICON_OFF)
+		message_end()
 	}
 }
 
-stock rm_set_rendering(index, fx = kRenderFxNone, r = 255, g = 255, b = 255, amount = 16) 
+stock SendStatusIcon(id, status=0, r=0, g=160, b=0)
+{
+	if(id){
+		message_begin(MSG_ONE_UNRELIABLE, g_iMsgIdStatusIcon, .player = id)
+		write_byte(status) // status: 0 - off, 1 - on, 2 - flash
+		write_string("suithelmet_full") // sprite name in hud.txt
+		write_byte(r) // Color Red
+		write_byte(g) // Color Green
+		write_byte(b) // Color Blue
+		message_end()
+	}else{
+		message_begin(MSG_BROADCAST, g_iMsgIdStatusIcon)
+		write_byte(0) // status: 0 - off, 1 - on, 2 - flash
+		message_end()
+	}
+}
+
+stock rm_set_rendering(index, fx = kRenderFxNone, r=255, g=255, b=255, amount=16) 
 {
 	new Float:RenderColor[3]
 	RenderColor[0] = float(r)

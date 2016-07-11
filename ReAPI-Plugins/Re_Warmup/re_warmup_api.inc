@@ -32,8 +32,10 @@ native WarmupModes:GetWarmupMode()
  */
 native SetWarmupMode(WarmupModes:iMode, iTime)
 
-
-forward WarmupStarted()
+/** stop on PLUGIN_HANDLED */
+forward WarmupStarted(WarmupModes:iMode, iTime)
 
 forward WarmupEnded()
+
+
 
