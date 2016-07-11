@@ -45,7 +45,7 @@ const TEAM_ALL = 4
 #define GLOW_THICK         	10				// "Плотность" цвета защиты
 
 #define NODRAW_CORPSES						// 
- 
+#define AUTO_RELOAD_WEAPON					// 
 
 /** FORMAT: "Menu Name" "Weapon ID" "BackPack Ammo" "Team" */
 
@@ -107,6 +107,11 @@ new const g_szWeaponName[any:WEAPON_P90+1][] = {
 	"weapon_flashbang","weapon_deagle","weapon_sg552","weapon_ak47","weapon_knife","weapon_p90"
 }
 
+public plugin_pause()
+{
+	back_cvar_values()
+}
+
 public plugin_end()
 {
 	back_cvar_values()
@@ -141,7 +146,7 @@ public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 	register_logevent("EventGameCommencing", 2, "0=World triggered", "1=Game_Commencing")
-	register_cvar("rewarmup", VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED )
+	register_cvar("warmup_version", VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED)
 	register_concmd("warmup_set", "ConCmd_WarmupStart", ADMIN_CFG, "< time | 0 = off >")
 
 	DisableHookChain(g_hChainList[Spawn] = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true))
@@ -151,7 +156,7 @@ public plugin_init()
 	DisableHookChain(g_hChainList[ChooseAppearance] = RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true))
 
 	g_pCvarWarmupTime = register_cvar("warmup_time", "60")
-	g_pCvarWarmupMode = register_cvar("warmup_mode", "1")
+	g_pCvarWarmupMode = register_cvar("warmup_mode", "2")
 #if defined USE_API
 	g_iFwdWarmupStart = CreateMultiForward("WarmupStarted", ET_STOP, FP_CELL, FP_CELL)
 	g_iFwdWarmupEnd = CreateMultiForward("WarmupEnded", ET_IGNORE)
@@ -289,6 +294,7 @@ public WarmupStart(iWarmupTime)
 public WarmupEnd()
 {
 	unregister_message(g_iMsgIdRoundTime, g_iMsgHookRoundTime)
+	show_menu(0, 0, "^n", 1)  // thaks a2
 
 	g_iMsgHookRoundTime = 0
 	g_iCountdown = 0
@@ -324,7 +330,7 @@ public TaskCountdownRestart()
 	{
 		WarmupEnd()
 		server_cmd("sv_restart 1")
-		set_task( 2.0, "EndHud" )
+		set_task(2.0, "EndHud")
 	}else{
 		set_hudmessage(HUD_COLOR_RGB, HUD_MSG_POS, .effects = 1, .holdtime = 1.0)
 		ShowSyncHudMsg(0, g_iHudSync, "[Режим Разминки]")
@@ -385,10 +391,19 @@ public CSGameRules_DeadPlayerWeapons(const index)
 public CBasePlayer_Killed(id, pevAttacker, iGib)
 {
 	set_task(RESPAWN_TIME.0, "Respawn", TASK_RESPAWN_ID + id)
+#if defined AUTO_RELOAD_WEAPON
+	if(g_iWarmupMode != ONLY_KNIFE && is_user_alive(pevAttacker))
+	{
+		new iActiveWeapon = get_member(pevAttacker, m_pActiveItem)
+		if(iActiveWeapon > 0)
+		{
+			rg_instant_reload_weapons(pevAttacker, iActiveWeapon)
+		}
+	}
+#endif
 #if defined NODRAW_CORPSES
 	set_entvar(id, var_effects, EF_NODRAW)
 #endif
-
 #if defined RESPAWN_BAR
 	ShowBar(id, RESPAWN_TIME)
 #else
@@ -557,4 +572,3 @@ stock rm_set_rendering(index, fx = kRenderFxNone, r=255, g=255, b=255, amount=16
 	set_entvar(index, var_renderamt, float(amount))
 	// return 1
 }
-
