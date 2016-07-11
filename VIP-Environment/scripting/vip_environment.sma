@@ -6,6 +6,7 @@
 *
 *	Credits:
 *	- wopox1337 - for: pieces of advice and testing
+*	- a2 - for: testing
 *	- Safety1st - for: Code "Menu Obeying BuyZone sample" & "Drop Pistol Without Shield"
 *	- Exolent[jNr] for: Tutorial "Dynamic Items in Menu and Plugin API"
 *	- ConnorMcLeod - for: Method checking buytime
@@ -16,6 +17,15 @@
 
 //■■■■■■■■■■■■■■■■■■■■■■■ CONFIG START ■■■■■■■■■■■■■■■■■■■■■■■//
 
+new const MAIN_MENU_CMD[] = 		"mainmenu"
+new const MAIN_MENU_SAY_CMD[] = 	"say /mm"
+new const WEAPON_MENU_CMD[] = 		"weaponmenu"
+new const WEAPON_MENU_SAY_CMD[] = 	"say /wm"
+new const BUY_MENU_CMD[] = 			"buymenu"
+new const BUY_MENU_SAY_CMD[] =		"say /bm"
+new const REBUY_CMD[] = 			"vrebuy"
+new const REBUY_SAY_CMD[] = 		"say /rebuy"
+
 #define CS_DEFAULT_BUY_SYSTEM		// buying time & buyzone check
 // #define DONT_CLOSE_MENU			//
 // #define WEAPON_STRIP				//
@@ -25,7 +35,7 @@
 
 //■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG END ■■■■■■■■■■■■■■■■■■■■■■■■//
 
-#define VERSION "2.0.8"
+#define VERSION "2.0.9"
 new const CONFIG_FILE[] = "/vip_environment.ini"
 
 
@@ -294,15 +304,15 @@ public plugin_init()
 	register_cvar("vip_environment_version", VERSION, FCVAR_SERVER|FCVAR_EXTDLL|FCVAR_SPONLY)
 	register_concmd("vip_reloadcfg", "ConCmd_CfgReload", ADMIN_CFG, "< reload config >")
 
-	register_clcmd("mainmenu", "ClCmd_MainMenu")
-	register_clcmd("weaponmenu", "ClCmd_WeaponMenu")
-	register_clcmd("buymenu", "ClCmd_BuyMenu")
-	register_clcmd("vrebuy", "ClCmd_Rebuy")
+	register_clcmd(MAIN_MENU_CMD, "ClCmd_MainMenu")
+	register_clcmd(WEAPON_MENU_CMD, "ClCmd_WeaponMenu")
+	register_clcmd(BUY_MENU_CMD, "ClCmd_BuyMenu")
+	register_clcmd(REBUY_CMD, "ClCmd_Rebuy")
 
-	register_clcmd("say /mm", "ClCmd_MainMenu")
-	register_clcmd("say /wm", "ClCmd_WeaponMenu")
-	register_clcmd("say /bm", "ClCmd_BuyMenu")
-	register_clcmd("say /rebuy", "ClCmd_Rebuy")
+	register_clcmd(MAIN_MENU_SAY_CMD, "ClCmd_MainMenu")
+	register_clcmd(WEAPON_MENU_SAY_CMD, "ClCmd_WeaponMenu")
+	register_clcmd(BUY_MENU_SAY_CMD, "ClCmd_BuyMenu")
+	register_clcmd(REBUY_SAY_CMD, "ClCmd_Rebuy")
 
 	register_event("HLTV", "Event_NewRound", "a", "1=0", "2=0")
 	register_event("TextMsg", "Event_NewGame", "a", "2=#Game_will_restart_in", "2=#Game_Commencing")
@@ -552,7 +562,7 @@ BuildMenu()
 	}
 	if(g_bSpawnWeaponAdded)
 	{
-		menu_additem(g_iMainMenuID, "Spawn Weapons: [DISABLED]", "6", g_iAccessWeaponMenu, g_iMainMenuCB)
+		menu_additem(g_iMainMenuID, "Spawn Weapons: [DISABLED]", "6", g_iAccessSpawnItems, g_iMainMenuCB)
 	}
 	new szMenuText[MAX_MENU_TEXT_LEN]
 	switch(g_iCounterType)
@@ -1080,10 +1090,18 @@ public MainMenuCallback(id, iMenu, iItem)
 			menu_item_setname(iMenu, iItem, szMenuText)	
 		}
 		case '5':{
+			if(~iFlags & g_iAccessWeaponMenu)
+			{
+				return ITEM_DISABLED
+			}
 			formatex(szMenuText, charsmax(szMenuText), "Show Menu: \y[%s\y]", !g_ePlayerData[id][iShowMenu] ? "\rDONT SHOW" : g_ePlayerData[id][iShowMenu] == MENU_MAIN ? "\wMAIN MENU" : "\wWEAPON MENU")
 			menu_item_setname(iMenu, iItem, szMenuText)
 		}
 		case '6':{
+			if(~iFlags & g_iAccessSpawnItems)
+			{
+				return ITEM_DISABLED
+			}
 			formatex(szMenuText, charsmax(szMenuText), "Spawn Weapons: \y[%s\y]", !g_ePlayerData[id][bGiveSpawnWeapon] ? "\rOFF" : "\wON")
 			menu_item_setname(iMenu, iItem, szMenuText)
 		}

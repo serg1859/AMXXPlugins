@@ -1,7 +1,8 @@
 
 //■■■■■■■■■■■■■■■■■■■■■■■ CONFIG START ■■■■■■■■■■■■■■■■■■■■■■■//
 
-#define DEFAULT_ACCESS		ACCESS_OTHER
+#define DEFAULT_ACCESS		ACCESS_BUY_MENU
+// #define SHOW_MESSAGE
 
 #define MAX_MODEL_LEN		64
 
@@ -27,7 +28,12 @@ new Trie:g_tWorldModels
 
 public plugin_init() 
 {
-	register_plugin("Block Pickup Custom Weapon", "0.0.1", "Vaqtincha")
+	register_plugin("Block Pickup Custom Weapon", "0.0.2", "Vaqtincha")
+	if(!vip_environment_loaded() || !IsAllowedMap())
+	{
+		pause("ad")
+	}
+
 	register_touch("weaponbox", "player", "OnWeaponboxTouch")
 	g_tWorldModels = TrieCreate()
 
@@ -80,7 +86,9 @@ public OnWeaponboxTouch(wEnt, id)
 
 	if(TrieKeyExists(g_tWorldModels, szModel))
 	{
-		// client_print(id, print_center, "Only VIPs!") // print_center flood 100/sec :D
+	#if defined SHOW_MESSAGE
+		client_print(id, print_center, "Only VIPs!") // print_center flood 100/sec :D
+	#endif
 		return PLUGIN_HANDLED
 	}
 	return PLUGIN_CONTINUE
