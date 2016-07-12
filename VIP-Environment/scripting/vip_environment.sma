@@ -18,26 +18,23 @@
 //■■■■■■■■■■■■■■■■■■■■■■■ CONFIG START ■■■■■■■■■■■■■■■■■■■■■■■//
 
 new const MAIN_MENU_CMD[] = 		"mainmenu"
-new const MAIN_MENU_SAY_CMD[] = 	"say /mm"
 new const WEAPON_MENU_CMD[] = 		"weaponmenu"
-new const WEAPON_MENU_SAY_CMD[] = 	"say /wm"
 new const BUY_MENU_CMD[] = 			"buymenu"
-new const BUY_MENU_SAY_CMD[] =		"say /bm"
+
 new const REBUY_CMD[] = 			"vrebuy"
-new const REBUY_SAY_CMD[] = 		"say /rebuy"
 
 #define CS_DEFAULT_BUY_SYSTEM		// buying time & buyzone check
 // #define DONT_CLOSE_MENU			//
-// #define WEAPON_STRIP				//
-// #define VAULT_EXPIRE_DAYS		1	// save user settings
+#define WEAPON_STRIP				//
+#define VAULT_EXPIRE_DAYS		1	// save user settings
 
 // #define DEBUG					// console info
 
 //■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG END ■■■■■■■■■■■■■■■■■■■■■■■■//
 
-#define VERSION "2.0.9"
+#define VERSION "2.1.0"
 new const CONFIG_FILE[] = "/vip_environment.ini"
-
+stock const VAULT_FILE[] = "vip_environment_vault"
 
 #include <amxmodx>
 #include <fun>
@@ -58,19 +55,28 @@ const MAX_MENU_TEXT_LEN = 64
 
 const REFILL_CLIP = 1<<0
 const GIVE_AMMO = 1<<1
+const DEFAULT_PISTOL = 0
 const TASKID_MENUCLOSE = 12138
 const Menu_Buy = 4
 const Menu_BuyItem = 10
+
 const SCOREATTRIB_VIP = 1<<2
 const ScoreAttrib_PlayerID = 1
 const ScoreAttrib_Flags = 2
 
-
-enum /* _:MENU_TYPES */
+enum _:MENU_TYPES
 {
+	MENU_NULL,
 	MENU_OFF,
 	MENU_MAIN,
 	MENU_WEAPON
+}
+
+new const MENU_TEXT[MENU_TYPES][] = {
+	"",
+	"\rDONT SHOW",
+	"\wMAIN MENU",
+	"\wWEAPON MENU"
 }
 
 enum _:WEAPON_DATA
@@ -102,11 +108,12 @@ enum _:PLAYER_DATA
 	iInBuyMenu,
 	iPreviousItem,
 	iPreviousBuy,
-	bool:bGiveSpawnWeapon,
-	iShowMenu
+	iPistolIndex,
+	iShowMenu,
+	bool:bCloseMenu
 }
 
-new bool:g_bMapHasBombTarget, bool:g_bSpawnWeaponAdded, g_iRoundCounter, g_iMaxPlayers
+new bool:g_bMapHasBombTarget, g_iRoundCounter, g_iMaxPlayers
 new g_iMsgIdScoreAttrib, g_iMsgIdBlinkAcct, g_iMsgHookScoreAttrib, g_bNotKilled
 new mp_buytime, mp_freezetime, Float:g_flEndOfBuyTime, g_szBuyTime[3], bool:g_bBuyTime
 // player arrays
@@ -115,6 +122,7 @@ new g_ePlayerData[MAX_PLAYERS+1][PLAYER_DATA]
 new Array:g_aDataBuyMenuItems, g_iNumBuyMenuItems
 new Array:g_aDataSpawnItems, g_iNumSpawnItems
 new Array:g_aDataMenuItems, g_iNumMenuItems
+new Array:g_aDataPistols, g_iPistolsTotal
 // menus
 new g_iMainMenuID, g_iMainMenuCB, g_iWeaponMenuID, g_iWeaponMenuCB
 // custom forwards
@@ -130,6 +138,7 @@ public plugin_precache()
 	g_aDataSpawnItems = ArrayCreate(WEAPON_DATA)
 	g_aDataMenuItems = ArrayCreate(WEAPON_DATA)
 	g_aDataBuyMenuItems = ArrayCreate(BUYMENU_DATA)
+	g_aDataPistols = ArrayCreate(WEAPON_DATA)
 	new eBuyData[BUYMENU_DATA]
 	ArrayPushArray(g_aDataBuyMenuItems, eBuyData)  // empty holder so id's start at 1
 	g_iNumBuyMenuItems++
@@ -144,7 +153,7 @@ new g_szAuthid[MAX_PLAYERS+1][MAX_AUTHID_LEN]
 
 GetNvault()
 {
-	g_iVaultData = nvault_open("vip_environment_vault")
+	g_iVaultData = nvault_open(VAULT_FILE)
 	if(g_iVaultData == INVALID_HANDLE)
 	{
 		set_fail_state("[V.I.P] ERROR: Opening nVault failed!")
@@ -156,28 +165,35 @@ GetNvault()
 public client_authorized(id)
 {
 	new iFlags = get_user_flags(id)
-	if(iFlags & g_iAccessWeaponMenu || iFlags & g_iAccessSpawnItems)
+	if(iFlags & g_iAccessWeaponMenu || iFlags & g_iAccessBuyMenu || iFlags & g_iAccessSpawnItems)
 	{
 		new szKey[MAX_AUTHID_LEN+15]
 		get_user_authid(id, g_szAuthid[id], MAX_AUTHID_LEN -1)
 
-		formatex(szKey, charsmax(szKey), "%s_iShowMenu", g_szAuthid[id][10]) // strip STEAM_0:0:
+		formatex(szKey, charsmax(szKey), "%s_ShowMenu", g_szAuthid[id][10]) // strip STEAM_0:0:
 		new nShowMenu = nvault_get(g_iVaultData, szKey)
 		if(nShowMenu)
 		{
-			g_ePlayerData[id][iShowMenu] = nShowMenu == 1 ? MENU_OFF : nShowMenu == 2 ? MENU_MAIN : MENU_WEAPON
+			g_ePlayerData[id][iShowMenu] = nShowMenu
 		}else{
 			g_ePlayerData[id][iShowMenu] = MENU_MAIN
 		}
 
-		formatex(szKey, charsmax(szKey), "%s_bSpawnWeapon", g_szAuthid[id][10]) // strip STEAM_0:0:
+		formatex(szKey, charsmax(szKey), "%s_SpawnPistol", g_szAuthid[id][10]) // strip STEAM_0:0:
 		new nSpawnWeapon = nvault_get(g_iVaultData, szKey)
 		if(nSpawnWeapon)
 		{
-			g_ePlayerData[id][bGiveSpawnWeapon] = bool:(nSpawnWeapon == 2)
+			g_ePlayerData[id][iPistolIndex] = nSpawnWeapon
+			if(nSpawnWeapon >= g_iPistolsTotal) // fix array error
+				g_ePlayerData[id][iPistolIndex] = DEFAULT_PISTOL
 		}else{
-			g_ePlayerData[id][bGiveSpawnWeapon] = true
+			g_ePlayerData[id][iPistolIndex] = DEFAULT_PISTOL
 		}
+
+		formatex(szKey, charsmax(szKey), "%s_CloseMenu", g_szAuthid[id][10]) // strip STEAM_0:0:
+		g_ePlayerData[id][bCloseMenu] = bool:nvault_get(g_iVaultData, szKey)
+	}else{
+		g_szAuthid[id][0] = 0
 	}
 }
 #endif
@@ -190,6 +206,7 @@ public plugin_end()
 	ArrayDestroy(g_aDataSpawnItems)
 	ArrayDestroy(g_aDataMenuItems)
 	ArrayDestroy(g_aDataBuyMenuItems)
+	ArrayDestroy(g_aDataPistols)
 	DestroyForward(g_iFwdSpawn)
 	DestroyForward(g_iFwdCfgReload)
 	DestroyForward(g_iFwdSetModel)
@@ -309,11 +326,6 @@ public plugin_init()
 	register_clcmd(BUY_MENU_CMD, "ClCmd_BuyMenu")
 	register_clcmd(REBUY_CMD, "ClCmd_Rebuy")
 
-	register_clcmd(MAIN_MENU_SAY_CMD, "ClCmd_MainMenu")
-	register_clcmd(WEAPON_MENU_SAY_CMD, "ClCmd_WeaponMenu")
-	register_clcmd(BUY_MENU_SAY_CMD, "ClCmd_BuyMenu")
-	register_clcmd(REBUY_SAY_CMD, "ClCmd_Rebuy")
-
 	register_event("HLTV", "Event_NewRound", "a", "1=0", "2=0")
 	register_event("TextMsg", "Event_NewGame", "a", "2=#Game_will_restart_in", "2=#Game_Commencing")
 #if defined CS_DEFAULT_BUY_SYSTEM
@@ -383,18 +395,13 @@ LoadConfig(bool:bReloadCfg = false)
 	}
 	if(bReloadCfg) // reset
 	{
-		new id
-		for(id = 1; id < g_iMaxPlayers; id++)
-		{
-			g_ePlayerData[id][iPreviousItem] = 0 // error fix
-		}
-
 		ArrayClear(g_aDataSpawnItems)
 		ArrayClear(g_aDataMenuItems)
+		ArrayClear(g_aDataPistols)
 		g_iNumSpawnItems = 0
 		g_iNumMenuItems = 0
+		g_iPistolsTotal = 0
 		g_iReloadWeaponFlags = 0
-		g_bSpawnWeaponAdded = false
 		menu_destroy(g_iWeaponMenuID)
 	}
 
@@ -412,7 +419,9 @@ LoadConfig(bool:bReloadCfg = false)
 
 	ArrayPushArray(g_aDataMenuItems, eItemData) // empty holder so id's start at 1
 	g_iNumMenuItems++
-
+	ArrayPushArray(g_aDataPistols, eItemData)
+	g_iPistolsTotal++
+	
 	while(!feof(iFilePointer))
 	{
 		fgets(iFilePointer, szDatas, charsmax(szDatas))
@@ -514,12 +523,21 @@ LoadConfig(bool:bReloadCfg = false)
 			#if defined DEBUG
 				server_print("SPAWN ITEMS (WeaponName: ^"%s^" | WeaponID: ^"%d^" | Amount: ^"%d^" | Counter: ^"%d^" | Team: ^"%d^")", eItemData[szWeaponName], eItemData[iWeaponID], eItemData[iAmount], eItemData[iCounter], eItemData[iItemTeam])
 			#endif
-				if(!g_bSpawnWeaponAdded)
+				if(1<<eItemData[iWeaponID] & SECONDARY_WEAPONS_BIT_SUM || 1<<eItemData[iWeaponID] & PRIMARY_WEAPONS_BIT_SUM)
 				{
-					g_bSpawnWeaponAdded = bool:(1<<eItemData[iWeaponID] & SECONDARY_WEAPONS_BIT_SUM || 1<<eItemData[iWeaponID] & PRIMARY_WEAPONS_BIT_SUM)
+					eItemData[iAmount] = str_to_num(szValue)
+					eItemData[iCounter] = str_to_num(szAmount)
+					strtoupper(szClassName)
+					copy(eItemData[szMenuName], charsmax(eItemData[szMenuName]), szClassName[7])
+					ArrayPushArray(g_aDataPistols, eItemData)
+					g_iPistolsTotal++
+				#if defined DEBUG
+					server_print("PISTOLS (PistolName ^"%s^" | PistolID ^"%d^" | PistolAmmo ^"%d^" | PistolCounter ^"%d^"", eItemData[szWeaponName], eItemData[iWeaponID], eItemData[iAmount], eItemData[iCounter])
+				#endif
+				}else{
+					ArrayPushArray(g_aDataSpawnItems, eItemData)
+					g_iNumSpawnItems++
 				}
-				ArrayPushArray(g_aDataSpawnItems, eItemData)
-				g_iNumSpawnItems++
 			}
 			case 4:{
 				if(!g_bIsAllowedMap && containi(szMapName, szDatas) != INVALID_HANDLE){
@@ -530,13 +548,28 @@ LoadConfig(bool:bReloadCfg = false)
 			}
 		}
 	}
+
 	fclose(iFilePointer)
 	TrieDestroy(tCheckWeaponName)
 
 	CheckRegisterMessage()
 	CheckConfigValues()
+	ArrayFixErrors()
 
 	return 1
+}
+
+// error fix "Invalid cellvector handle provided (4:2:2)"
+ArrayFixErrors()
+{
+	new id
+	for(id = 1; id < g_iMaxPlayers; id++)
+	{
+		if(g_ePlayerData[id][iPreviousItem] >= g_iNumMenuItems)
+			g_ePlayerData[id][iPreviousItem] = 0
+		if(g_ePlayerData[id][iPistolIndex] >= g_iPistolsTotal)
+			g_ePlayerData[id][iPistolIndex] = DEFAULT_PISTOL
+	}
 }
 
 BuildMenu()
@@ -555,15 +588,20 @@ BuildMenu()
 		menu_additem(g_iMainMenuID, "Weapon Menu^n", "1", g_iAccessWeaponMenu, g_iMainMenuCB)
 		menu_additem(g_iMainMenuID, "Previous Item: [NONE]^n^n", "3", g_iAccessWeaponMenu, g_iMainMenuCB)
 	}
-	
+
 	if(g_iMenuAuto > 0)
 	{
 		menu_additem(g_iMainMenuID, "Show Menu: [DISABLED]", "5", g_iAccessWeaponMenu, g_iMainMenuCB)
 	}
-	if(g_bSpawnWeaponAdded)
+	if(g_iPistolsTotal > 1)
 	{
 		menu_additem(g_iMainMenuID, "Spawn Weapons: [DISABLED]", "6", g_iAccessSpawnItems, g_iMainMenuCB)
 	}
+	if(g_iMenuCloseTime > 0)
+	{
+		menu_additem(g_iMainMenuID, "Menu AutoClose: [DISABLED]", "7", g_iAccessWeaponMenu, g_iMainMenuCB)
+	}
+
 	new szMenuText[MAX_MENU_TEXT_LEN]
 	switch(g_iCounterType)
 	{
@@ -589,7 +627,27 @@ BuildMenu()
 	}
 }
 
+#if defined VAULT_EXPIRE_DAYS
+SaveData(id)
+{
+	if(!g_szAuthid[id][0]) // non vip
+	{
+		return
+	}
 
+	new szKey[MAX_AUTHID_LEN+15], szValue[3]
+	formatex(szKey, charsmax(szKey), "%s_ShowMenu", g_szAuthid[id][10]) // strip STEAM_0:0:
+	num_to_str(g_ePlayerData[id][iShowMenu], szValue, charsmax(szValue))
+	nvault_set(g_iVaultData, szKey, szValue)
+
+	num_to_str(g_ePlayerData[id][iPistolIndex], szValue, charsmax(szValue))
+	formatex(szKey, charsmax(szKey), "%s_SpawnPistol", g_szAuthid[id][10]) // strip STEAM_0:0:
+	nvault_set(g_iVaultData, szKey, szValue)
+
+	formatex(szKey, charsmax(szKey), "%s_CloseMenu", g_szAuthid[id][10]) // strip STEAM_0:0:
+	nvault_set(g_iVaultData, szKey, g_ePlayerData[id][bCloseMenu] ? "1" : "0")
+}
+#endif
 public client_putinserver(id)
 {
 	ResetAll(id)
@@ -597,6 +655,9 @@ public client_putinserver(id)
 
 public client_disconnect(id)
 {
+#if defined VAULT_EXPIRE_DAYS
+	SaveData(id)
+#endif
 	ResetAll(id)
 }
 
@@ -609,7 +670,8 @@ public Event_HideStatusIcon(id)
 public Event_MenuAutoClose(taskid)
 {
 	new id = taskid - TASKID_MENUCLOSE
-	CloseMenu(id, g_ePlayerData[id][iInMenu])
+	if(!g_ePlayerData[id][bCloseMenu])
+		CloseMenu(id, g_ePlayerData[id][iInMenu])
 }
 
 public Event_NewGame()
@@ -740,11 +802,17 @@ public Spawned(id)
 	{
 		OpenWeaponMenu(id)
 	}
-	if(~iFlags & g_iAccessSpawnItems || !g_iNumSpawnItems)
+	if(~iFlags & g_iAccessSpawnItems)
 	{
 		return
 	}
+	GivePistol(id)
 
+	if(!g_iNumSpawnItems)
+	{
+		return
+	}
+	
 	new eItemData[WEAPON_DATA], i, iUserTeam = cs_get_user_team(id)
 
 	for(i = 0; i < g_iNumSpawnItems; i++) 
@@ -759,10 +827,6 @@ public Spawned(id)
 		{
 			continue
 		}
-		if(!g_ePlayerData[id][bGiveSpawnWeapon] && (1<<eItemData[iWeaponID] & SECONDARY_WEAPONS_BIT_SUM || 1<<eItemData[iWeaponID] & PRIMARY_WEAPONS_BIT_SUM))
-		{
-			continue
-		}
 		if(GetItemAllowed(id, eItemData[iCounter]))
 		{
 			GiveItem(id, eItemData, .bNotify = false)
@@ -772,7 +836,7 @@ public Spawned(id)
 
 OpenWeaponMenu(id)
 {
-	if(!g_iMenuAuto || !g_ePlayerData[id][iShowMenu] || (g_iMenuAuto == 1 && IsUserSurvived(id)) || (g_iMenuAuto == 2 && cs_get_user_hasprim(id)))
+	if(!g_iMenuAuto || g_ePlayerData[id][iShowMenu] == MENU_OFF || (g_iMenuAuto == 1 && IsUserSurvived(id)) || (g_iMenuAuto == 2 && cs_get_user_hasprim(id)))
 	{
 		return
 	}
@@ -784,7 +848,7 @@ OpenWeaponMenu(id)
 		{
 			switch(g_ePlayerData[id][iShowMenu]) // always open
 			{
-				case MENU_OFF: return
+				case MENU_NULL, MENU_OFF: return
 				case MENU_MAIN: menu_display(id, g_iMainMenuID, 0)
 				case MENU_WEAPON: ShowWeaponMenu(id, .iPage = 0, .bNotify = false)
 				// default: return
@@ -874,7 +938,7 @@ public ClCmd_MainMenu(id)
 	}
 
 	new iFlags = get_user_flags(id)
-	if(iFlags & g_iAccessWeaponMenu || iFlags & g_iAccessBuyMenu)
+	if(iFlags & g_iAccessWeaponMenu || iFlags & g_iAccessBuyMenu || iFlags & g_iAccessSpawnItems)
 	{
 		// menu fix
 #if AMXX_VERSION_NUM < 183
@@ -979,7 +1043,7 @@ ShowWeaponMenu(id, iPage, bool:bNotify = true)
 		}
 		return
 	}
-	if(g_ePlayerData[id][iUsedCounter] >= g_iMaxUse && !CheckResetType(id, bNotify))
+	if(g_ePlayerData[id][iUsedCounter] >= g_iMaxUse && !CheckResetType(id, bool:bNotify))
 	{
 		return
 	}
@@ -1019,21 +1083,19 @@ public MainMenuHandler(id, iMenu, iItem)
 		case 3: PreviousItem(id)
 		case 4: PreviousBuy(id)
 		case 5:{
-			g_ePlayerData[id][iShowMenu] = g_ePlayerData[id][iShowMenu] == MENU_OFF ? MENU_MAIN : g_ePlayerData[id][iShowMenu] == MENU_MAIN ? MENU_WEAPON : MENU_OFF
-		#if defined VAULT_EXPIRE_DAYS
-			new szKey[MAX_AUTHID_LEN+15]
-			formatex(szKey, charsmax(szKey), "%s_iShowMenu", g_szAuthid[id][10]) // strip STEAM_0:0:
-			nvault_set(g_iVaultData, szKey, !g_ePlayerData[id][iShowMenu] ? "1" : g_ePlayerData[id][iShowMenu] == MENU_MAIN ? "2" : "3") // +1
-		#endif
+			if(g_ePlayerData[id][iShowMenu]++ == MENU_WEAPON)
+				g_ePlayerData[id][iShowMenu] = MENU_OFF
+
 			menu_display(id, g_iMainMenuID, 0)
 		}
 		case 6:{
-			g_ePlayerData[id][bGiveSpawnWeapon] = g_ePlayerData[id][bGiveSpawnWeapon] ? false : true
-		#if defined VAULT_EXPIRE_DAYS
-			new szKey[MAX_AUTHID_LEN+15]
-			formatex(szKey, charsmax(szKey), "%s_bSpawnWeapon", g_szAuthid[id][10]) // strip STEAM_0:0:
-			nvault_set(g_iVaultData, szKey, g_ePlayerData[id][bGiveSpawnWeapon] ? "2" : "1") // "1" == false, "2" == true
-		#endif
+			if(g_ePlayerData[id][iPistolIndex]++ == g_iPistolsTotal-1)
+				g_ePlayerData[id][iPistolIndex] = DEFAULT_PISTOL
+
+			menu_display(id, g_iMainMenuID, 0)
+		}
+		case 7:{
+			g_ePlayerData[id][bCloseMenu] = g_ePlayerData[id][bCloseMenu] ? false : true
 			menu_display(id, g_iMainMenuID, 0)
 		}
 	}
@@ -1049,7 +1111,7 @@ public MainMenuCallback(id, iMenu, iItem)
 
 	new szNum[3], szMenuText[MAX_MENU_TEXT_LEN], iAccess, hCallback, iFlags = get_user_flags(id)
 	menu_item_getinfo(iMenu, iItem, iAccess, szNum, charsmax(szNum), szMenuText, charsmax(szMenuText), hCallback)
-	new eMenuData[WEAPON_DATA], eBuyData[BUYMENU_DATA]
+	new eMenuData[WEAPON_DATA], eBuyData[BUYMENU_DATA], eItemData[WEAPON_DATA]
 
 	switch(szNum[0])
 	{
@@ -1094,7 +1156,8 @@ public MainMenuCallback(id, iMenu, iItem)
 			{
 				return ITEM_DISABLED
 			}
-			formatex(szMenuText, charsmax(szMenuText), "Show Menu: \y[%s\y]", !g_ePlayerData[id][iShowMenu] ? "\rDONT SHOW" : g_ePlayerData[id][iShowMenu] == MENU_MAIN ? "\wMAIN MENU" : "\wWEAPON MENU")
+
+			formatex(szMenuText, charsmax(szMenuText), "Show Menu: \y[%s\y]", MENU_TEXT[g_ePlayerData[id][iShowMenu]])
 			menu_item_setname(iMenu, iItem, szMenuText)
 		}
 		case '6':{
@@ -1102,7 +1165,22 @@ public MainMenuCallback(id, iMenu, iItem)
 			{
 				return ITEM_DISABLED
 			}
-			formatex(szMenuText, charsmax(szMenuText), "Spawn Weapons: \y[%s\y]", !g_ePlayerData[id][bGiveSpawnWeapon] ? "\rOFF" : "\wON")
+
+			if(g_ePlayerData[id][iPistolIndex] == DEFAULT_PISTOL)
+			{
+				formatex(szMenuText, charsmax(szMenuText), "Spawn Pistol: \y[\rDEFAULT\y]")
+			}else{
+				ArrayGetArray(g_aDataPistols, g_ePlayerData[id][iPistolIndex], eItemData)
+				formatex(szMenuText, charsmax(szMenuText), "Spawn Pistol: \y[\w%s\y]", eItemData[szMenuName])
+			}
+			menu_item_setname(iMenu, iItem, szMenuText)
+		}
+		case '7':{
+			if(~iFlags & g_iAccessWeaponMenu)
+			{
+				return ITEM_DISABLED
+			}
+			formatex(szMenuText, charsmax(szMenuText), "Menu Auto Close: \y[%s\y]", !g_ePlayerData[id][bCloseMenu] ? "\wYES" : "\rNO")
 			menu_item_setname(iMenu, iItem, szMenuText)
 		}
 	}
@@ -1257,10 +1335,6 @@ ResetAll(id)
 	g_ePlayerData[id][iInBuyMenu] = -1
 	g_ePlayerData[id][iPreviousItem] = 0
 	g_ePlayerData[id][iPreviousBuy] = 0
-#if !defined VAULT_EXPIRE_DAYS
-	g_ePlayerData[id][iShowMenu] = MENU_MAIN
-	g_ePlayerData[id][bGiveSpawnWeapon] = true
-#endif
 	if(g_iMenuCloseTime > 0)
 	{
 		remove_task(TASKID_MENUCLOSE + id)
@@ -1294,6 +1368,21 @@ CheckRegisterMessage()
 	}else{
 		unregister_message(g_iMsgIdScoreAttrib, g_iMsgHookScoreAttrib)
 		g_iMsgHookScoreAttrib = 0
+	}
+}
+
+GivePistol(id)
+{
+	if(g_iPistolsTotal <= 1 || g_ePlayerData[id][iPistolIndex] == DEFAULT_PISTOL)
+	{
+		return
+	}
+
+	new eItemData[WEAPON_DATA]
+	ArrayGetArray(g_aDataPistols, g_ePlayerData[id][iPistolIndex], eItemData)
+	if(GetItemAllowed(id, eItemData[iCounter]))
+	{
+		GiveItem(id, eItemData,.bNotify = false)
 	}
 }
 
