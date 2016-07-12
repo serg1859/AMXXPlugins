@@ -276,9 +276,9 @@ public WarmupStart(WarmupModes:iMode, iWarmupTime)
 	{
 		case FREE_BUY: g_iWarmupMode = FREE_BUY
 		case ONLY_KNIFE: g_iWarmupMode = ONLY_KNIFE
-		case EQUIP_MENU: g_iWarmupMode = CheckCountArray(EQUIP_MENU) ? EQUIP_MENU : FREE_BUY
-		case AUTO_EQUIP: g_iWarmupMode = CheckCountArray(AUTO_EQUIP) ? AUTO_EQUIP : FREE_BUY
-		case RANDOM_WEAPON: g_iWarmupMode = CheckCountArray(RANDOM_WEAPON) ? RANDOM_WEAPON : FREE_BUY
+		case EQUIP_MENU: g_iWarmupMode = CheckModeCount(EQUIP_MENU) ? EQUIP_MENU : FREE_BUY
+		case AUTO_EQUIP: g_iWarmupMode = CheckTotalCount() ? AUTO_EQUIP : FREE_BUY
+		case RANDOM_WEAPON: g_iWarmupMode = CheckModeCount(RANDOM_WEAPON) ? RANDOM_WEAPON : FREE_BUY
 		case 5: g_iWarmupMode = GetRandomMode()
 		// default: return 0 // used clamp
 	}
@@ -575,24 +575,33 @@ WarmupModes:GetRandomMode()
 	new WarmupModes:iRand = WarmupModes:random_num(any:FREE_BUY, any:RANDOM_WEAPON)
 	switch(iRand)
 	{
-		case EQUIP_MENU: iRand = CheckCountArray(EQUIP_MENU) ? EQUIP_MENU : FREE_BUY
-		case AUTO_EQUIP: iRand = CheckCountArray(AUTO_EQUIP) ? AUTO_EQUIP : FREE_BUY
-		case RANDOM_WEAPON: iRand = CheckCountArray(RANDOM_WEAPON) ? RANDOM_WEAPON : FREE_BUY
+		case EQUIP_MENU: iRand = CheckModeCount(EQUIP_MENU) ? EQUIP_MENU : FREE_BUY
+		case AUTO_EQUIP: iRand = CheckTotalCount() ? AUTO_EQUIP : FREE_BUY
+		case RANDOM_WEAPON: iRand = CheckModeCount(RANDOM_WEAPON) ? RANDOM_WEAPON : FREE_BUY
 		// default: return iRand
 	}
 	return iRand
 }
 
-bool:CheckCountArray(WarmupModes:iMode)
+bool:CheckTotalCount()
 {
-	if((iMode == EQUIP_MENU || iMode == AUTO_EQUIP) && g_iTotalWeapons < 1)
+	if(g_iTotalWeapons < 1)
 	{
 		server_print("[WARMUP] WARNING: Empty array g_eWeapons! Will be used ^"Free Buy^" mode!")
 		return false
 	}
-	if(iMode == RANDOM_WEAPON && g_iTotalWeapons < 2)
+	return true
+}
+
+bool:CheckModeCount(WarmupModes:iMode)
+{
+	if(!CheckTotalCount())
 	{
-		server_print("[WARMUP] WARNING: Need more weapons for randomness mode! Will be used ^"Free Buy^" mode!")
+		return false
+	}
+	if((iMode == EQUIP_MENU || iMode == RANDOM_WEAPON) && g_iTotalWeapons < 2)
+	{
+		server_print("[WARMUP] WARNING: Need more weapons for ^"%s^" mode! Will be used ^"Free Buy^" mode!", g_szModes[iMode])
 		return false
 	}
 	return true
