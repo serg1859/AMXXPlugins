@@ -12,7 +12,7 @@
 	#pragma library re_warmup_api
 #endif
 
-enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MODE, RANDOM_WEAPON }
+enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MENU, AUTO_EQUIP, RANDOM_WEAPON }
 
 
 //******** Natives ********

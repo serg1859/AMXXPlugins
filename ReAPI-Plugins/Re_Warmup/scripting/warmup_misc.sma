@@ -102,9 +102,11 @@ public CBasePlayer_AddAccount(const intex, amount, RewardType:type, bool:bTrackC
 	if(type == RT_ENEMY_KILLED)
 	{
 		SetHookChainArg(2, ATYPE_INTEGER, 1) // +1
+		return HC_OVERRIDE
 	}else{
 		SetHookChainArg(2, ATYPE_INTEGER, get_user_frags(intex))
 		SetHookChainArg(4, ATYPE_INTEGER, false)
+		return HC_OVERRIDE
 	}
 
 	return HC_CONTINUE

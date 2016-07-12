@@ -26,7 +26,7 @@ public WarmupStarted(WarmupModes:iMode, iTime)
 	if(get_pcvar_num(g_pCvarWarmupRandom))
 	{
 		EnableHookChain(g_hPlayerSpawn)
-		if(iMode == FREE_BUY)
+		if(iMode == FREE_BUY || iMode == EQUIP_MENU)
 			CreateBuyZone()
 	}
 }
