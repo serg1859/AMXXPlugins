@@ -13,7 +13,7 @@
 #endif
 
 enum WarmupModes { FREE_BUY = 0, ONLY_KNIFE, EQUIP_MENU, AUTO_EQUIP, RANDOM_WEAPON }
-
+#define IsValidTeam(%1) 	(TEAM_TERRORIST <= get_member(%1, m_iTeam) <= TEAM_CT)
 
 //******** Natives ********
 
@@ -45,8 +45,11 @@ native SetWarmupMode(WarmupModes:iMode, iTime)
 /** stop on PLUGIN_HANDLED */
 forward WarmupStarted(WarmupModes:iMode, iTime)
 
-
 forward WarmupEnded()
+
+forward WarmupCountdown(iCurrent, iCountdown)
+
+
 
 
 

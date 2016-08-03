@@ -1,3 +1,10 @@
+// Copyright © 2016 Vaqtincha
+
+/**■■■■■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG START ■■■■■■■■■■■■■■■■■■■■■■■■■■■■*/
+
+
+/**■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG END ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■*/
+
 
 #include <amxmodx>
 #include <fakemeta>
@@ -8,51 +15,46 @@
 #define MAX_PATH_LEN	186
 #define CUSTOM_BUYZONE	-919
 
+
 new Float:g_flSpawns[MAX_SPAWNS][9], HookChain:g_hPlayerSpawn, g_iSpawnCount
 new g_pCvarWarmupRandom
 new const BUYZONE[] = "func_buyzone"
 new g_iLastSpawnIndex[MAX_CLIENTS+1]
 
+
 public plugin_init()
 {
-	register_plugin("Warmup Spawn Random", "0.0.4", "Vaqtincha")
-	g_pCvarWarmupRandom = register_cvar("warmup_random_spawn", "1")
+	register_plugin("Warmup Random Spawn", "0.0.7", "Vaqtincha")
 	DisableHookChain(g_hPlayerSpawn = RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true))
+
+	g_pCvarWarmupRandom = register_cvar("warmup_random_spawn", "1")
+
 	readspawns()
 }
 
+
 public WarmupStarted(WarmupModes:iMode, iTime)
 {
-	if(get_pcvar_num(g_pCvarWarmupRandom))
-	{
-		EnableHookChain(g_hPlayerSpawn)
-		if(iMode == FREE_BUY || iMode == EQUIP_MENU)
-			CreateBuyZone()
-	}
+	EnableHookChain(g_hPlayerSpawn)
+	if(iMode == FREE_BUY)
+		CreateBuyZone()
 }
 
 public WarmupEnded()
 {
-	if(g_hPlayerSpawn)
-		DisableHookChain(g_hPlayerSpawn)
-
+	DisableHookChain(g_hPlayerSpawn)
 	RemoveBuyZone()
 }
 
-public plugin_pause()
+public client_putinserver(id)
 {
-	RemoveBuyZone()
-}
-
-public client_putinserver(id) 
 	g_iLastSpawnIndex[id] = -1
+}
 
 public CBasePlayer_Spawn(id)
 {
-	if(is_user_alive(id))
-	{
+	if(is_user_alive(id) && get_pcvar_num(g_pCvarWarmupRandom))
 		do_random_spawn(id)
-	}
 }
 
 // Original code by Avalanche
@@ -123,24 +125,20 @@ do_random_spawn(id)
 
 	if(!is_hull_vacant(vecHolder, HULL_HUMAN) || sp_index == g_iLastSpawnIndex[id])
 	{
-		new newe2, i
+		new i, atpt
 		for(i = 0; i < sizeof(g_flSpawns); i++)
 		{
 			if(i == g_iLastSpawnIndex[id])
 				continue
 
-			i = random_num(0, g_iSpawnCount-1)
-			if(i == g_iLastSpawnIndex[id])
-				continue
-
-			newe2 = random_num(i, g_iSpawnCount-1)
+			atpt = random_num(i, g_iSpawnCount-1)
 			// get origin for comparisons
-			vecHolder[0] = g_flSpawns[newe2][0]
-			vecHolder[1] = g_flSpawns[newe2][1]
-			vecHolder[2] = g_flSpawns[newe2][2]
+			vecHolder[0] = g_flSpawns[atpt][0]
+			vecHolder[1] = g_flSpawns[atpt][1]
+			vecHolder[2] = g_flSpawns[atpt][2]
 			if(is_hull_vacant(vecHolder, HULL_HUMAN)) 
 			{
-				sp_index = newe2
+				sp_index = atpt
 				break
 			}else{
 				return
@@ -203,7 +201,6 @@ stock str_count(str[], searchchar)
 }
 
 // checks if a space is vacant, by VEN
-
 stock bool:is_hull_vacant(const Float:origin[3], hull) 
 {
 	new tr = 0
