@@ -1,15 +1,17 @@
 /* Доработка от wopox1337 
 	- Добавлена поддержка colorchat (183, 182)
-
-
+	- Добавлены квары, на управление чатом.
+	- ДОбавлена поддержка reAPI
 */
-#define USE_ReAPI
+
+#if defined REAPI_VERSION_MAJOR
+	#define USE_ReAPI
+#endif
 
 #pragma semicolon					1
 
 #include <amxmodx>
 #include <fakemeta>
-
 #if defined USE_ReAPI
 	#include <reapi>
 #else
@@ -39,8 +41,8 @@
 
 #define CVM_CHAT_PREFIX				"[CVM]"
 
-#define CVM_MODE_AES				/* AES by serfreeman1337  			*/
-#define CVM_MODE_CSSTATS_SQL		/* CSSTATS SQL by serfreeman1337	*/
+// #define CVM_MODE_AES				/* AES by serfreeman1337  			*/
+// #define CVM_MODE_CSSTATS_SQL		/* CSSTATS SQL by serfreeman1337	*/
 
 #define CVM_HIDE_IMMUNITY			/* Скрывать ли игрока у которого иммунитет или админка из меню Gag и VoteGag */
 
@@ -948,6 +950,7 @@ public FMHook_VoiceClientListening_Pre(const iReceiver, const iSender)	{
 		
 	engfunc(EngFunc_SetClientListening, iReceiver, iSender, false);
 	return FMRES_SUPERCEDE;
+}
 }
 
 public CBasePlayer_Spawn_Post(const pId)	{
