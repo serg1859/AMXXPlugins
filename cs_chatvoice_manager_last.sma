@@ -1,13 +1,35 @@
-#include <amxmodx>
-#include <fakemeta>
-#include <hamsandwich>
+/* Доработка от wopox1337 
+	- Добавлена поддержка colorchat (183, 182)
 
-#include <colorchat>
+
+*/
+#define USE_ReAPI
 
 #pragma semicolon					1
 
+#include <amxmodx>
+#include <fakemeta>
+
+#if defined USE_ReAPI
+	#include <reapi>
+#else
+#include <hamsandwich>
+#endif
+
+#if AMXX_VERSION_NUM < 183
+	#include <colorchat>
+
+	#define print_team_default	DontChange
+	#define print_team_grey		Grey
+	#define print_team_red		Red
+	#define print_team_blue		Blue
+	#define client_print_color	ColorChat 
+	
+	const MAX_PLAYERS 			= 32;
+#endif
+
 #define PLUGIN_NAME					"[CS] Chat & Voice Manager"
-#define PLUGIN_VERS					"0.3"
+#define PLUGIN_VERS					"0.3ADDDDDDD"
 #define PLUGIN_AUTH					"81x08"
 
 #define SetBit(%0,%1) 				((%0) |= (1 << (%1)))
@@ -15,16 +37,11 @@
 #define IsSetBit(%0,%1) 			((%0) & (1 << (%1)))
 #define IsNotSetBit(%0,%1) 			(~(%0) & (1 << (%1)))
 
-#define MAX_PLAYERS					32
-
 #define CVM_CHAT_PREFIX				"[CVM]"
 
-//#define CVM_MODE_AES				/* AES by serfreeman1337  			*/
-//#define CVM_MODE_CSSTATS_SQL		/* CSSTATS SQL by serfreeman1337	*/
+#define CVM_MODE_AES				/* AES by serfreeman1337  			*/
+#define CVM_MODE_CSSTATS_SQL		/* CSSTATS SQL by serfreeman1337	*/
 
-#define CVM_HEAR_ENEMY				/* Слышит ли игрок противника */
-#define CVM_HEAR_DEATH				/* Слышит ли живой игрок мёртвого игрока */
-#define CVM_DEATH_HEAR_LIVE			/* Слышит ли мёртвый игрок живого игрока */
 #define CVM_HIDE_IMMUNITY			/* Скрывать ли игрока у которого иммунитет или админка из меню Gag и VoteGag */
 
 #define CVM_GAG_ACCESS				"abc"	/* Флаги для открытия Gag меню */
@@ -57,13 +74,16 @@
 	native get_user_stats_sql(const pId, const iStats[8], const iBodyHits[8]);
 #endif
 
-enum {
-	TEAM_UNNASIGNED = 0,
-	
-	TEAM_T,
+#if !defined USE_ReAPI
+enum TeamName
+{
+	TEAM_UNASSIGNED,
+	TEAM_TERRORIST,
 	TEAM_CT,
-	TEAM_SPECATOR
+	TEAM_SPECTATOR
 };
+#endif
+
 
 enum _: ENUM_DATA_PL_VOTE_GAG	{
 	PL_VOTE_GAG_ID,
@@ -121,13 +141,43 @@ new gp_szIP[MAX_PLAYERS + 1 char][16];
 
 new Trie: g_tPlayerGag;
 
+/* Cvar's Pointers */
+new pCvar_HearEnemy,
+	pCvar_HearDeath,
+	pCvar_DeathHearAlive;
+
+/* Bool's from cvars */
+new g_bHearEnemy		= false,
+	g_bHearDeath		= false,
+	g_bDeathHearAlive	= false;
+
 /*================================================================================
  [PLUGIN]
 =================================================================================*/
 public plugin_init()	{
 	/* [PLUGIN] */
 	register_plugin(PLUGIN_NAME, PLUGIN_VERS, PLUGIN_AUTH);
-
+	
+	/* [CVAR'S] */
+	register_cvar("cvm_HearEnemy", "1");         /* Слышит ли игрок противника */
+	register_cvar("cvm_HearDeath", "1");         /* Слышит ли живой игрок мёртвого игрока */
+	register_cvar("cvm_DeathHearAlive", "1");    /* Слышит ли мёртвый игрок живого игрока */
+	
+	if(get_cvar_num("cvm_HearEnemy"))
+	{
+		g_bHearEnemy = true;
+	}
+	
+	if(get_cvar_num("cvm_HearDeath"))
+	{
+		g_bHearDeath = true;
+	}
+	
+	if(get_cvar_num("cvm_DeathHearAlive"))
+	{
+		g_bDeathHearAlive = true;
+	}
+	
 	/* [CLCMD] */
 	register_clcmd("say", "ClCmd_HookSay");
 	register_clcmd("say_team", "ClCmd_HookSayTeam");
@@ -162,10 +212,15 @@ public plugin_init()	{
 	/* [FAKEMETA] */
 	register_forward(FM_Voice_SetClientListening, "FMHook_VoiceClientListening_Pre", false);
 
+	/* [ReAPI] */
+	#if defined USE_ReAPI
+	RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn_Post", .post = true);
+	RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed_Post", .post = true);
+	#else
 	/* [HAMSANDWICH] */
-	RegisterHam(Ham_Spawn, "player", "HamHook_Player_Spawn_Post", true);
-	RegisterHam(Ham_Killed, "player", "HamHook_Player_Killed_Post", true);
-	
+	RegisterHam(Ham_Spawn, "player", "CBasePlayer_Spawn_Post", .Post = true);
+	RegisterHam(Ham_Killed, "player", "CBasePlayer_Killed_Post", .Post = true);
+	#endif
 	/* [OTHER] */
 	g_iMaxPlayers = get_maxplayers();
 	
@@ -200,12 +255,17 @@ public client_putinserver(pId)	{
 
 	new tData[ENUM_DATA_PLAYER_GAG];
 	if(TrieGetArray(g_tPlayerGag, gp_szIP[pId], tData, sizeof(tData)))	{
-		if(tData[PL_GAG_TIME] > get_systime())	{
+		if(tData[PL_GAG_TIME] > get_systime())
+		{
 			gp_iGag[pId][PL_GAG_TYPE] = tData[PL_GAG_TYPE];
 			gp_iGag[pId][PL_GAG_TIME] = tData[PL_GAG_TIME];
 			
 			SetBit(gp_iBit[BIT_GAGGED], pId);
-		} else UnGag(pId);
+		}
+		else
+		{
+			UnGag(pId);
+		}
 	}
 	
 	#if defined CVM_MODE_AES || defined CVM_MODE_CSSTATS_SQL
@@ -222,7 +282,7 @@ public client_disconnect(pId)	{
 	for(new iCount = BIT_NULL; iCount < BIT_MAX; iCount++)
 		ClearBit(gp_iBit[iCount], pId);
 
-	gp_iTeam[pId] = TEAM_UNNASIGNED;
+	gp_iTeam[pId] = TEAM_UNASSIGNED;
 
 	gp_iGag[pId][PL_GAG_TYPE] = 0;
 	gp_iGag[pId][PL_GAG_TIME] = 0;
@@ -245,14 +305,14 @@ HookSay(const pId, const bool: bTeam = false)	{
 	if(IsSetBit(gp_iBit[BIT_GAGGED], pId) && (gp_iGag[pId][PL_GAG_TYPE] == (bTeam ? GAG_TYPE_COMMAND_CHAT : GAG_TYPE_CHAT) || gp_iGag[pId][PL_GAG_TYPE] == GAG_TYPE_ALL))	{
 		new iGagTimeLeft = gp_iGag[pId][PL_GAG_TIME] - get_systime();
 		if(iGagTimeLeft > 0)	{
-			ColorChat(pId, DontChange, "^3%s ^1Извините, но у Вас ^4^"Gag^" ^1на ^3%s ^1чат. Времени осталось: ^4%s", CVM_CHAT_PREFIX, bTeam ? "командный" : "общий", UTIL_FixTime(iGagTimeLeft));
+			client_print_color(pId, print_team_default, "^3%s ^1Извините, но у Вас ^4^"Gag^" ^1на ^3%s ^1чат. Времени осталось: ^4%s", CVM_CHAT_PREFIX, bTeam ? "командный" : "общий", UTIL_FixTime(iGagTimeLeft));
 			return PLUGIN_HANDLED;
 		} else UnGag(pId);
 	}
 	
 	#if defined CVM_MODE_CSSTATS_SQL
 		if(gp_iFrags[pId] < CVM_CSSTATS_FRAG_USE_CHAT)	{
-			ColorChat(pId, DontChange, "^3%s ^1Для допуска к чату, Вам нужно набрать ^3%d ^1убийств.", CVM_CHAT_PREFIX, CVM_CSSTATS_FRAG_USE_CHAT);
+			client_print_color(pId, print_team_default, "^3%s ^1Для допуска к чату, Вам нужно набрать ^3%d ^1убийств.", CVM_CHAT_PREFIX, CVM_CSSTATS_FRAG_USE_CHAT);
 			return PLUGIN_HANDLED;
 		}
 	#endif
@@ -262,7 +322,7 @@ HookSay(const pId, const bool: bTeam = false)	{
 			if(g_szRankNameChat[0] == '^0')
 				aes_get_level_name(CVM_AES_RANK_USE_CHAT, g_szRankNameChat, charsmax(g_szRankNameChat));
 
-			ColorChat(pId, DontChange, "^3%s ^1Для допуска к чату, получите звание ^3^"%s^"", CVM_CHAT_PREFIX, g_szRankNameChat);
+			client_print_color(pId, print_team_default, "^3%s ^1Для допуска к чату, получите звание ^3^"%s^"", CVM_CHAT_PREFIX, g_szRankNameChat);
 			return PLUGIN_HANDLED;
 		}
 	#endif
@@ -280,7 +340,7 @@ public ClCmd_VoteGag(const pId)	{
 	new iSysTime = get_systime(); static iNextTime;
 	
 	if(iNextTime > iSysTime)	{
-		ColorChat(pId, DontChange, "^3%s ^1Запуск нового голосования возможно через ^4%d ^1секунд", CVM_CHAT_PREFIX, iNextTime - iSysTime);
+		client_print_color(pId, print_team_default, "^3%s ^1Запуск нового голосования возможно через ^4%d ^1секунд", CVM_CHAT_PREFIX, iNextTime - iSysTime);
 		return PLUGIN_HANDLED;
 	}
 	
@@ -331,7 +391,7 @@ Show_GagMenu(const pId, const iPos)	{
 	new szMenu[512], iLen, iPagesNum = (iPlayersNum / 8 + ((iPlayersNum % 8) ? 1 : 0));
 	switch(iPagesNum)	{
 		case 0:	{
-			ColorChat(pId, DontChange, "^3%s ^1Нету подходящих Игроков.", CVM_CHAT_PREFIX);
+			client_print_color(pId, print_team_default, "^3%s ^1Нету подходящих Игроков.", CVM_CHAT_PREFIX);
 			return PLUGIN_HANDLED;
 		}
 		default: iLen = formatex(szMenu, charsmax(szMenu), "\y[CVM Gag] \rВ\wыберите игрока \d[%d|%d]^n^n", iPos + 1, iPagesNum);
@@ -373,7 +433,7 @@ public Handler_GagMenu(const pId, const iKey)	{
 			new iPlayer = gp_iMenuTarget[pId] = gp_iMenuPlayers[pId][gp_iMenuPosition[pId] * 8 + iKey];
 			
 			if(IsNotSetBit(gp_iBit[BIT_CONNECTED], iPlayer))	{
-				ColorChat(pId, DontChange, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
+				client_print_color(pId, print_team_default, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
 				return PLUGIN_HANDLED;
 			}
 			
@@ -384,12 +444,12 @@ public Handler_GagMenu(const pId, const iKey)	{
 				get_user_name(iPlayer, szName, charsmax(szName));
 
 				switch(CVM_SHOW_TEXT_GAG)	{
-					case 0: ColorChat(0, DontChange, "^3%s ^1Игроку ^4%s ^1сняли затычку.", CVM_CHAT_PREFIX, szName);
+					case 0: client_print_color(0, print_team_default, "^3%s ^1Игроку ^4%s ^1сняли затычку.", CVM_CHAT_PREFIX, szName);
 					case 1:	{
-						ColorChat(pId, DontChange, "^3%s ^1Вы игроку ^4%s ^1сняли затычку.", CVM_CHAT_PREFIX, szName);
+						client_print_color(pId, print_team_default, "^3%s ^1Вы игроку ^4%s ^1сняли затычку.", CVM_CHAT_PREFIX, szName);
 
 						get_user_name(pId, szName, charsmax(szName));
-						ColorChat(iPlayer, DontChange, "^3%s ^1Админ ^4%s ^1снял Вам затычку.", CVM_CHAT_PREFIX, szName);
+						client_print_color(iPlayer, print_team_default, "^3%s ^1Админ ^4%s ^1снял Вам затычку.", CVM_CHAT_PREFIX, szName);
 					}
 				}
 			} else return Show_ChooseGagType(pId);
@@ -452,7 +512,7 @@ public Handler_ChooseGagTime(const pId, const iKey)	{
 			new iPlayer = gp_iMenuTarget[pId];
 		
 			if(IsNotSetBit(gp_iBit[BIT_CONNECTED], iPlayer))	{
-				ColorChat(pId, DontChange, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
+				client_print_color(pId, print_team_default, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
 				return Show_GagMenu(pId, gp_iMenuPosition[pId]);
 			}
 
@@ -469,12 +529,12 @@ public Handler_ChooseGagTime(const pId, const iKey)	{
 			get_user_name(iPlayer, szName, charsmax(szName));
 
 			switch(CVM_SHOW_TEXT_GAG)	{
-				case 0: ColorChat(0, DontChange, "^3%s ^1Игрока ^4%s ^1заткнули на ^4%d ^1минут. (%s)", CVM_CHAT_PREFIX, szName, g_iGagTimes[iKey], g_szGagTypes[gp_iGag[iPlayer][PL_GAG_TYPE]]);
+				case 0: client_print_color(0, print_team_default, "^3%s ^1Игрока ^4%s ^1заткнули на ^4%d ^1минут. (%s)", CVM_CHAT_PREFIX, szName, g_iGagTimes[iKey], g_szGagTypes[gp_iGag[iPlayer][PL_GAG_TYPE]]);
 				case 1:	{
-					ColorChat(pId, DontChange, "^3%s ^1Вы игроку ^4%s ^1дали затычку на ^4%d ^1минут. (%s)", CVM_CHAT_PREFIX, szName, g_iGagTimes[iKey], g_szGagTypes[gp_iGag[iPlayer][PL_GAG_TYPE]]);
+					client_print_color(pId, print_team_default, "^3%s ^1Вы игроку ^4%s ^1дали затычку на ^4%d ^1минут. (%s)", CVM_CHAT_PREFIX, szName, g_iGagTimes[iKey], g_szGagTypes[gp_iGag[iPlayer][PL_GAG_TYPE]]);
 
 					get_user_name(pId, szName, charsmax(szName));
-					ColorChat(iPlayer, DontChange, "^3%s ^1Админ ^4%s выдал Вам затычку на ^4%d ^1минут. (%s)", CVM_CHAT_PREFIX, szName, g_iGagTimes[iKey], g_szGagTypes[gp_iGag[iPlayer][PL_GAG_TYPE]]);
+					client_print_color(iPlayer, print_team_default, "^3%s ^1Админ ^4%s выдал Вам затычку на ^4%d ^1минут. (%s)", CVM_CHAT_PREFIX, szName, g_iGagTimes[iKey], g_szGagTypes[gp_iGag[iPlayer][PL_GAG_TYPE]]);
 				}
 			}
 		}
@@ -511,7 +571,7 @@ Show_MuteMenu(const pId, const iPos)	{
 	new szMenu[512], iLen, iPagesNum = (iPlayersNum / 8 + ((iPlayersNum % 8) ? 1 : 0));
 	switch(iPagesNum)	{
 		case 0:	{
-			ColorChat(pId, DontChange, "^3%s ^1Нету подходящих Игроков.", CVM_CHAT_PREFIX);
+			client_print_color(pId, print_team_default, "^3%s ^1Нету подходящих Игроков.", CVM_CHAT_PREFIX);
 			return PLUGIN_HANDLED;
 		}
 		default: iLen = formatex(szMenu, charsmax(szMenu), "\y[CVM Mute] \rВ\wыберите игрока \d[%d|%d]^n^n", iPos + 1, iPagesNum);
@@ -546,7 +606,7 @@ public Handler_MuteMenu(const pId, const iKey)	{
 			new iPlayer = gp_iMenuPlayers[pId][gp_iMenuPosition[pId] * 8 + iKey];
 			
 			if(IsNotSetBit(gp_iBit[BIT_CONNECTED], iPlayer))	{
-				ColorChat(pId, DontChange, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
+				client_print_color(pId, print_team_default, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
 				return PLUGIN_HANDLED;
 			}
 			
@@ -556,7 +616,7 @@ public Handler_MuteMenu(const pId, const iKey)	{
 			if(IsSetBit(gp_iBit[BIT_MUTTED][pId], iPlayer)) ClearBit(gp_iBit[BIT_MUTTED][pId], iPlayer);
 			else SetBit(gp_iBit[BIT_MUTTED][pId], iPlayer);
 
-			ColorChat(pId, DontChange, "^3%s ^1Вы %s слышите ^4%s", CVM_CHAT_PREFIX, IsSetBit(gp_iBit[BIT_MUTTED][pId], iPlayer) ? "больше не" : "теперь", szName);
+			client_print_color(pId, print_team_default, "^3%s ^1Вы %s слышите ^4%s", CVM_CHAT_PREFIX, IsSetBit(gp_iBit[BIT_MUTTED][pId], iPlayer) ? "больше не" : "теперь", szName);
 		}
 	}
 	
@@ -602,7 +662,7 @@ Show_VoteGagMenu(const pId, const iPos)	{
 	new szMenu[512], iLen, iPagesNum = (iPlayersNum / 8 + ((iPlayersNum % 8) ? 1 : 0));
 	switch(iPagesNum)	{
 		case 0:	{
-			ColorChat(pId, DontChange, "^3%s ^1Нету подходящих Игроков.", CVM_CHAT_PREFIX);
+			client_print_color(pId, print_team_default, "^3%s ^1Нету подходящих Игроков.", CVM_CHAT_PREFIX);
 			return PLUGIN_HANDLED;
 		}
 		default: iLen = formatex(szMenu, charsmax(szMenu), "\y[CVM VoteGag] \rВ\wыберите игрока \d[%d|%d]^n^n", iPos + 1, iPagesNum);
@@ -645,7 +705,7 @@ public Handler_VoteGagMenu(const pId, const iKey)	{
 			g_iVotePlayerGag[PL_VOTE_GAG_ID] = gp_iMenuPlayers[pId][gp_iMenuPosition[pId] * 8 + iKey];
 			
 			if(IsNotSetBit(gp_iBit[BIT_CONNECTED], g_iVotePlayerGag[PL_VOTE_GAG_ID]))	{
-				ColorChat(pId, DontChange, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
+				client_print_color(pId, print_team_default, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
 				return PLUGIN_HANDLED;
 			}
 			
@@ -709,7 +769,7 @@ public Handler_ChooseVoteGagTime(const pId, const iKey)	{
 			new iPlayer = g_iVotePlayerGag[PL_VOTE_GAG_ID];
 		
 			if(IsNotSetBit(gp_iBit[BIT_CONNECTED], iPlayer))	{
-				ColorChat(pId, DontChange, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
+				client_print_color(pId, print_team_default, "^3%s ^1Этот Игрок не подходит.", CVM_CHAT_PREFIX);
 				return Show_VoteGagMenu(pId, gp_iMenuPosition[pId]);
 			}
 
@@ -750,13 +810,13 @@ public Show_ChooseVoteGagAnswer(const pId)	{
 
 public Handler_ChooseVoteGagAnswer(const pId, const iKey)	{
 	(iKey == 4) ? g_iVoteTotalYes++ : g_iVoteTotalNo++;
-	ColorChat(pId, DontChange, "^3%s ^1Вы проголосовали ^4^"%s^"", CVM_CHAT_PREFIX, (iKey == 4) ? "Да" : "Нет");
+	client_print_color(pId, print_team_default, "^3%s ^1Вы проголосовали ^4^"%s^"", CVM_CHAT_PREFIX, (iKey == 4) ? "Да" : "Нет");
 	
 	return PLUGIN_HANDLED;
 }
 
 public task_EndVoteGag()	{
-	ColorChat(0, DontChange, "^3%s ^1Голосование завершено. За - ^4%d ^1| Против - ^3%d", CVM_CHAT_PREFIX, g_iVoteTotalYes, g_iVoteTotalNo);
+	client_print_color(0, print_team_default, "^3%s ^1Голосование завершено. За - ^4%d ^1| Против - ^3%d", CVM_CHAT_PREFIX, g_iVoteTotalYes, g_iVoteTotalNo);
 
 	if(g_iVoteTotalYes >= g_iVoteTotalNo)	{		
 		new iPlayer = g_iVotePlayerGag[PL_VOTE_GAG_ID];
@@ -786,10 +846,10 @@ public EventHook_TeamInfo()	{
 
 	if(szCurTeam[gp_iTeam[pId]] != szTeam[0])	{
 		switch(szTeam[0])	{
-			case 'U': gp_iTeam[pId] = TEAM_UNNASIGNED;
-			case 'T': gp_iTeam[pId] = TEAM_T;
+			case 'U': gp_iTeam[pId] = TEAM_UNASSIGNED;
+			case 'T': gp_iTeam[pId] = TEAM_TERRORIST;
 			case 'C': gp_iTeam[pId] = TEAM_CT;
-			case 'S': gp_iTeam[pId] = TEAM_SPECATOR;
+			case 'S': gp_iTeam[pId] = TEAM_SPECTATOR;
 		}
 	}
 }
@@ -843,68 +903,75 @@ public FMHook_VoiceClientListening_Pre(const iReceiver, const iSender)	{
 	if(IsSetBit(gp_iBit[BIT_LISTEN_ALL], iReceiver))
 		return FMRES_IGNORED;
 	
-	#if defined CVM_HEAR_DEATH
-		if(IsSetBit(gp_iBit[BIT_ALIVE], iReceiver) && (IsSetBit(gp_iBit[BIT_ALIVE], iSender) || IsNotSetBit(gp_iBit[BIT_ALIVE], iSender)))	{
-			#if defined CVM_HEAR_ENEMY
+	if(g_bHearDeath)
+	{
+		
+		if(IsSetBit(gp_iBit[BIT_ALIVE], iReceiver) && (IsSetBit(gp_iBit[BIT_ALIVE], iSender) || IsNotSetBit(gp_iBit[BIT_ALIVE], iSender))){
+			if(g_bHearEnemy)
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender] || gp_iTeam[iReceiver] != gp_iTeam[iSender])
-			#else
+		else
+		{
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender])
-			#endif
+		}
 			
 			return FMRES_IGNORED;
-		}
-	#else
+	}else{
 		if(IsSetBit(gp_iBit[BIT_ALIVE], iReceiver) && IsSetBit(gp_iBit[BIT_ALIVE], iSender))	{
-			#if defined CVM_HEAR_ENEMY
+			if(g_bHearEnemy)
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender] || gp_iTeam[iReceiver] != gp_iTeam[iSender])
-			#else
+			else
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender])
-			#endif
 
 			return FMRES_IGNORED;
 		}
-	#endif
-
-	#if defined CVM_DEATH_HEAR_LIVE
+	}
+	if(g_bDeathHearAlive)
+	{
 		if(IsNotSetBit(gp_iBit[BIT_ALIVE], iReceiver) && (IsNotSetBit(gp_iBit[BIT_ALIVE], iSender) || IsSetBit(gp_iBit[BIT_ALIVE], iSender)))	{
-			#if defined CVM_HEAR_ENEMY
+			if(g_bHearEnemy)
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender] || gp_iTeam[iReceiver] != gp_iTeam[iSender])
-			#else
+			else
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender])
-			#endif
 
 			return FMRES_IGNORED;
 		}
-	#else
+	}else{
 		if(IsNotSetBit(gp_iBit[BIT_ALIVE], iReceiver) && IsNotSetBit(gp_iBit[BIT_ALIVE], iSender))	{
-			#if defined CVM_HEAR_ENEMY
+			if(g_bHearEnemy)
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender] || gp_iTeam[iReceiver] != gp_iTeam[iSender])
-			#else
+			else
 				if(gp_iTeam[iReceiver] == gp_iTeam[iSender])
-			#endif
 
 			return FMRES_IGNORED;
 		}
-	#endif
+	}
 		
 	engfunc(EngFunc_SetClientListening, iReceiver, iSender, false);
 	return FMRES_SUPERCEDE;
 }
 
-public HamHook_Player_Spawn_Post(const pId)	{
+public CBasePlayer_Spawn_Post(const pId)	{
 	if(is_user_alive(pId))	{
 		if(IsNotSetBit(gp_iBit[BIT_ALIVE], pId))
 			SetBit(gp_iBit[BIT_ALIVE], pId);
 	}
 }
 
-public HamHook_Player_Killed_Post(const vId)	{
+public CBasePlayer_Killed_Post(const vId)	{
 	if(IsNotSetBit(gp_iBit[BIT_ALIVE], vId))
+		#if defined USE_ReAPI
+		return HC_CONTINUE;
+		#else
 		return HAM_IGNORED;
+		#endif
 	
 	ClearBit(gp_iBit[BIT_ALIVE], vId);
 
+	#if defined USE_ReAPI
+	return HC_CONTINUE;
+	#else
 	return HAM_IGNORED;
+	#endif
 }
 
 /*================================================================================
