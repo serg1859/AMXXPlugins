@@ -1,0 +1,187 @@
+// Copyright © 2016 Vaqtincha
+
+#include <amxmodx>
+#include <csdm>
+#include <hamsandwich>
+
+
+#define IsPlayer(%1)				(1 <= (%1) <= g_iMaxPlayers)
+
+const HideWeapon_bitFlags = 1
+
+enum
+{
+	HIDEHUD_WEAPONS		=	(1<<0),
+	HIDEHUD_FLASHLIGHT	=	(1<<1),
+	HIDEHUD_ALL			=	(1<<2),
+	HIDEHUD_HEALTH		=	(1<<3),
+	HIDEHUD_TIMER		=	(1<<4),
+	HIDEHUD_MONEY		=	(1<<5),
+	HIDEHUD_CROSSHAIR	=	(1<<6)
+}
+
+new const g_szWeaponList[][] = 
+{
+	"weapon_m4a1", "weapon_usp", "weapon_famas", "weapon_glock18"
+}
+
+new HamHook:g_hSecondaryAttack[sizeof(g_szWeaponList)], HamHook:g_hAddToPlayer[sizeof(g_szWeaponList)]
+new g_bWeaponState[MAX_CLIENTS + 1]
+new g_iMaxPlayers, g_iMsgIdHideWeapon, g_iMsgHookHideWeapon
+
+new bool:g_bWeaponStateRemember = true, bool:g_bRefillBPammo = true
+new g_bitHideHudFlags, g_iRefillClip = 1
+
+
+public plugin_init()
+{
+	register_plugin("CSDM Misc", CSDM_VERSION, "Vaqtincha")
+
+	for(new i = 0; i < sizeof(g_szWeaponList); i++)
+	{
+		DisableHamForward(g_hAddToPlayer[i] = RegisterHam(Ham_Item_AddToPlayer, g_szWeaponList[i], "CBasePlayerItem_AddToPlayer", .Post = true))
+		DisableHamForward(g_hSecondaryAttack[i] = RegisterHam(Ham_Weapon_SecondaryAttack, g_szWeaponList[i], "CBasePlayerWeapon_SecAttack", .Post = true))
+	}
+
+	g_iMsgIdHideWeapon = get_user_msgid("HideWeapon")
+	g_iMaxPlayers = get_maxplayers()
+}
+
+public plugin_cfg()
+{
+	CheckForwards()
+}
+
+public CSDM_ConfigurationLoad(const ReadTypes:iReadAction)
+{
+	CSDM_RegisterConfig("misc", "ReadCfg")
+}
+
+public CSDM_ExecuteCVarValues()
+{
+	if(g_bRefillBPammo)
+	{
+		set_cvar_num("mp_refill_bpammo_weapons", 2)
+	}
+}
+
+public client_putinserver(pPlayer)
+{
+	g_bWeaponState[pPlayer] = 0
+}
+
+public CSDM_PlayerKilled(const pVictim, const pKiller, const HitBoxGroup:iLastHitGroup)
+{
+	if(!g_iRefillClip || pVictim == pKiller || !pKiller)
+		return
+
+	switch(g_iRefillClip)
+	{
+		case 1:
+		{
+			new pActiveWeapon = get_member(pKiller, m_pActiveItem)
+			if(pActiveWeapon != NULLENT)
+			{
+				rg_instant_reload_weapons(pKiller, pActiveWeapon)
+			}
+		}
+		case 2:	rg_instant_reload_weapons(pKiller, 0)
+	}
+}
+
+public CBasePlayerWeapon_SecAttack(const pWeapon)
+{
+	if(pWeapon == NULLENT)
+		return HAM_IGNORED
+
+	new pPlayer = get_member(pWeapon, m_pPlayer)
+	if(IsPlayer(pPlayer))
+	{
+		g_bWeaponState[pPlayer] = get_member(pWeapon, m_Weapon_iWeaponState)
+	}
+
+	return HAM_IGNORED
+}
+
+public CBasePlayerItem_AddToPlayer(const pWeapon, const pPlayer)
+{
+	if(pWeapon != NULLENT && IsPlayer(pPlayer))
+	{
+		set_member(pWeapon, m_Weapon_iWeaponState, g_bWeaponState[pPlayer])
+	}
+
+	return HAM_IGNORED
+}
+
+public Message_HideWeapon(const iMsgId, const iMsgDest, const iMsgEntity)
+{
+	if(g_bitHideHudFlags)
+	{
+		set_msg_arg_int(HideWeapon_bitFlags, ARG_BYTE, get_msg_arg_int(HideWeapon_bitFlags) | g_bitHideHudFlags)
+	}
+}
+
+public ReadCfg(szLineData[], const iSectionID)
+{
+	new szKey[32], szValue[16], szSign[2]
+	if(!ParseConfigKey(szLineData, szKey, szSign, szValue))
+		return
+
+	if(equal(szKey, "weaponstate_remember"))
+	{
+		g_bWeaponStateRemember = bool:(str_to_num(szValue))
+	}
+	else if(equal(szKey, "refill_bpammo_weapons"))
+	{
+		g_bRefillBPammo = bool:(str_to_num(szValue))
+	}
+	else if(equal(szKey, "refill_clip_weapons"))
+	{
+		g_iRefillClip = clamp(str_to_num(szValue), 0, 2)
+	}
+	else if(equal(szKey, "hide_hud_flags"))
+	{
+		if(ContainFlag(szValue, "c"))
+			g_bitHideHudFlags |= HIDEHUD_CROSSHAIR
+		if(ContainFlag(szValue, "f"))
+			g_bitHideHudFlags |= HIDEHUD_FLASHLIGHT
+		if(ContainFlag(szValue, "m"))
+			g_bitHideHudFlags |= HIDEHUD_MONEY
+		if(ContainFlag(szValue, "h"))
+			g_bitHideHudFlags |= HIDEHUD_HEALTH
+		if(ContainFlag(szValue, "t"))
+			g_bitHideHudFlags |= HIDEHUD_TIMER
+	}
+}
+
+CheckForwards()
+{
+	for(new i = 0; i < sizeof(g_szWeaponList); i++)
+	{
+		if(g_bWeaponStateRemember)
+		{
+			EnableHamForward(g_hAddToPlayer[i])
+			EnableHamForward(g_hSecondaryAttack[i])
+		}
+		else
+		{
+			DisableHamForward(g_hAddToPlayer[i])
+			DisableHamForward(g_hSecondaryAttack[i])
+		}	
+	}
+
+	if(g_bitHideHudFlags && !g_iMsgHookHideWeapon)
+	{
+		g_iMsgHookHideWeapon = register_message(g_iMsgIdHideWeapon, "Message_HideWeapon")
+	}
+	else if(!g_bitHideHudFlags && g_iMsgHookHideWeapon)
+	{
+		unregister_message(g_iMsgIdHideWeapon, g_iMsgHookHideWeapon)
+		g_iMsgHookHideWeapon = 0
+	}
+}
+
+
+
+
+
