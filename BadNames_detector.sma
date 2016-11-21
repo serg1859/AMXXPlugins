@@ -56,6 +56,13 @@ public plugin_init()
 	{
 		g_bitBlockFlags |= BLOCK_CHAT
 	}
+	
+	if(!g_bitBlockFlags)
+	{
+		new szMsg[64];
+		formatex(szMsg, charsmax(szMsg), "CVar badname_punishtype = '' (empty), plugin stopped!");
+		set_fail_state(szMsg);
+	}
 
 	register_clcmd("say",		"Handler_say");
 	register_clcmd("say_team",	"Handler_say");
@@ -136,7 +143,8 @@ public CheckNickname(pPlayerId)
 	{
 		ArrayGetString(g_aBadNames, i, szSuspectedName, charsmax(szSuspectedName));
 		
-		if(equali(szPlayerName,szSuspectedName))
+		//if(equali(szPlayerName,szSuspectedName))
+		if(ContainFlag(szPlayerName,szSuspectedName))
 		{
 			Get_PunishPlayer(pPlayerId, szPlayerName);
 			break;
