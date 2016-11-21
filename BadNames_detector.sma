@@ -13,21 +13,43 @@ const MAX_PLAYERS = 32;
 #endif
 
 new Array:g_aBadNames, g_iBadNamesSize;
-//new g_pCvar_SetsBits;
+new g_bitBlockFlags;
 
-new g_bPunishedPlayers;
+enum
+{
+	BLOCK_VOICE		=	(1<<0),
+	BLOCK_CHAT		=	(1<<1)
+}
+
+
+new g_bPunishedChatPlayers;
 
 #define get_bit(%1,%2)		(%1 & (1 << (%2 & 31)))
 #define set_bit(%1,%2)		(%1 |= (1 << (%2 & 31)))
 #define reset_bit(%1,%2)	(%1 &= ~(1 << (%2 & 31)))
+
+	//Thanks to Vaqtincha for this macros
+#define ContainFlag(%1,%2) 			(containi(%1,%2) != -1)
 
 public plugin_init()
 {
 	register_plugin("Bad Name Detector", VERSION, "wopox1337");
 	register_cvar("badname_detector", VERSION, FCVAR_SERVER | FCVAR_SPONLY);
 	
-	//g_pCvar_SetsBits = register_cvar("badname_punishtype", "abc");
+	register_cvar("badname_punishtype", "ab");
 	
+	new szCvarString[4];
+	get_cvar_string("badname_punishtype", szCvarString, charsmax(szCvarString))
+	
+	if(ContainFlag(szCvarString, "a"))
+	{
+		g_bitBlockFlags |= BLOCK_VOICE
+	}
+	if(ContainFlag(szCvarString, "b"))
+	{
+		g_bitBlockFlags |= BLOCK_CHAT
+	}
+
 	register_clcmd("say",		"Handler_say");
 	register_clcmd("say_team",	"Handler_say");
 	
@@ -73,13 +95,13 @@ public plugin_cfg()
 }
 
 
-public client_authorized(pPlayerId)
+public client_putinserver(pPlayerId)
 {
 	if(is_user_bot(pPlayerId) || is_user_hltv(pPlayerId))
 	{
 		return;
 	}
-	
+
 	new szPlayerName[32];
 	get_user_name(pPlayerId, szPlayerName, charsmax(szPlayerName));
 	
@@ -99,14 +121,14 @@ public client_authorized(pPlayerId)
 
 public client_disconnect(pPlayerId)
 {
-	reset_bit(g_bPunishedPlayers, pPlayerId);
+	reset_bit(g_bPunishedChatPlayers, pPlayerId);
 	// чё-то тут не так, не нравится мне этот метод...
 	set_speak(pPlayerId, SPEAK_ALL);
 }
 
 public Handler_say(pPlayerId)
 {
-	if(get_bit(g_bPunishedPlayers, pPlayerId))
+	if(get_bit(g_bPunishedChatPlayers, pPlayerId))
 	{
 		client_print(pPlayerId, print_chat, "Ваш чат заблокирован! Смените ник со стандартного для разблокировки чата!");
 		client_cmd(pPlayerId, "spk buttons/blip1.wav")
@@ -119,11 +141,16 @@ public Handler_say(pPlayerId)
 
 public Get_PunishPlayer(pPlayerId, const szPlayerName[])
 {
-	set_bit(g_bPunishedPlayers, pPlayerId);
-	// Аналогично
-	set_speak(pPlayerId, SPEAK_MUTED);
+	if(g_bitBlockFlags & BLOCK_VOICE)
+	{
+		set_speak(pPlayerId, SPEAK_MUTED);
+	}
+	if(g_bitBlockFlags & BLOCK_CHAT)
+	{
+		set_bit(g_bPunishedChatPlayers, pPlayerId);
+	}
 
-	set_task(2.0, "task_ShowMessage", pPlayerId);
+	set_task(5.0, "task_ShowMessage", pPlayerId);
 	log_to_file("BadNames_Detected.log", "Player: '%s'", szPlayerName);
 }
 
