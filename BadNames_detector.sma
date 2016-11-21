@@ -1,6 +1,13 @@
 /*
-		Плохие иемна не могут писать чат и говорить в микро.
+		Плагин: Bad Name Detector
+		Автор: wopox1337
+		Описание: Описание: Игрокам с не допустимыми именами блокируется чат и микрофон.
+		
+		Квары: badname_punishtype [a|b|ab]
+				a - блокировать микрофон;
+				b - блокировать чат;
 */
+
 new const BADNAME_CONFIG[] = "/BadNames.ini";
 
 #include <amxmodx>
@@ -102,6 +109,24 @@ public client_putinserver(pPlayerId)
 		return;
 	}
 
+	CheckNickname(pPlayerId);
+}
+
+public client_infochanged(pPlayerId)
+
+{
+	if(!is_user_connected(pPlayerId))
+	{
+		return PLUGIN_CONTINUE;
+	}
+
+	CheckNickname(pPlayerId);
+
+	return PLUGIN_CONTINUE;
+}
+
+public CheckNickname(pPlayerId)
+{
 	new szPlayerName[32];
 	get_user_name(pPlayerId, szPlayerName, charsmax(szPlayerName));
 	
@@ -122,7 +147,7 @@ public client_putinserver(pPlayerId)
 public client_disconnect(pPlayerId)
 {
 	reset_bit(g_bPunishedChatPlayers, pPlayerId);
-	// чё-то тут не так, не нравится мне этот метод...
+
 	set_speak(pPlayerId, SPEAK_ALL);
 }
 
@@ -130,8 +155,8 @@ public Handler_say(pPlayerId)
 {
 	if(get_bit(g_bPunishedChatPlayers, pPlayerId))
 	{
-		client_print(pPlayerId, print_chat, "Ваш чат заблокирован! Смените ник со стандартного для разблокировки чата!");
-		client_cmd(pPlayerId, "spk buttons/blip1.wav")
+		client_print(pPlayerId, print_chat, "[BLOCKED] Ваш чат заблокирован! Смените ник со стандартного для разблокировки чата!");
+		client_cmd(pPlayerId, "spk buttons/blip1.wav");
 		
 		return PLUGIN_HANDLED;
 	}
