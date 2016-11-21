@@ -4,6 +4,7 @@
 new const BADNAME_CONFIG[] = "/BadNames.ini";
 
 #include <amxmodx>
+#include <engine>
 
 new const VERSION[] = "0.0.1";
 
@@ -99,6 +100,8 @@ public client_authorized(pPlayerId)
 public client_disconnect(pPlayerId)
 {
 	reset_bit(g_bPunishedPlayers, pPlayerId);
+	// чё-то тут не так, не нравится мне этот метод...
+	set_speak(pPlayerId, SPEAK_ALL);
 }
 
 public Handler_say(pPlayerId)
@@ -106,6 +109,8 @@ public Handler_say(pPlayerId)
 	if(get_bit(g_bPunishedPlayers, pPlayerId))
 	{
 		client_print(pPlayerId, print_chat, "Ваш чат заблокирован! Смените ник со стандартного для разблокировки чата!");
+		client_cmd(pPlayerId, "spk buttons/blip1.wav")
+		
 		return PLUGIN_HANDLED;
 	}
 
@@ -115,12 +120,17 @@ public Handler_say(pPlayerId)
 public Get_PunishPlayer(pPlayerId, const szPlayerName[])
 {
 	set_bit(g_bPunishedPlayers, pPlayerId);
+	// Аналогично
+	set_speak(pPlayerId, SPEAK_MUTED);
 
-	client_print(0, print_chat, "Зашёл игрок '%s' с недопустимым ником!", szPlayerName);
+	set_task(2.0, "task_ShowMessage", pPlayerId);
+	log_to_file("BadNames_Detected.log", "Player: '%s'", szPlayerName);
+}
+
+public task_ShowMessage(pPlayerId)
+{
 	set_hudmessage(.red = 255, .x = 0.4, .y = -1.0, .effects = 1, .fxtime = 3.0, .holdtime = 5.0);
 	show_hudmessage(pPlayerId, "Вам заблокирован доступ к чату^nсмените ник для разблокировки!");
-	
-	log_to_file("BadNames_Detected.log", "Player: '%s'", szPlayerName);
 }
 
 public plugin_end()
