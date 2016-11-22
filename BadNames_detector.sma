@@ -1,9 +1,8 @@
 /*
 		Плагин: Bad Name Detector
 		Автор: wopox1337
-		Описание: Игрокам с не допустимыми именами блокируется чат и микрофон.
+		Описание: Описание: Игрокам с не допустимыми именами блокируется чат и микрофон.
 			Имена берутся из файла '/amxmodx/configs/BadNames.ini"
-			P.S: Против стандартных ников мониторингов и не далёких игроков.
 		
 		Квары: badname_punishtype [a|b|ab]
 				a - блокировать микрофон;
@@ -47,7 +46,7 @@ public plugin_init()
 	
 	register_cvar("badname_punishtype", "ab");
 	
-	new szCvarString[4];
+	new szCvarString[3];
 	get_cvar_string("badname_punishtype", szCvarString, charsmax(szCvarString))
 	
 	if(ContainFlag(szCvarString, "a"))
@@ -58,9 +57,10 @@ public plugin_init()
 	{
 		g_bitBlockFlags |= BLOCK_CHAT
 		
-		register_clcmd("say",		"Handler_say");
-		register_clcmd("say_team",	"Handler_say");
+		register_clcmd("say",		"hCommand_Say");
+		register_clcmd("say_team",	"hCommand_Say");
 		
+		state HookChat_enabled;
 	}
 	
 	if(!g_bitBlockFlags)
@@ -69,7 +69,7 @@ public plugin_init()
 		formatex(szMsg, charsmax(szMsg), "CVar badname_punishtype = '' (empty), plugin stopped!");
 		set_fail_state(szMsg);
 	}
-	
+
 	g_aBadNames = ArrayCreate(32);
 }
 
@@ -162,7 +162,7 @@ public client_disconnect(pPlayerId)
 	set_speak(pPlayerId, SPEAK_ALL);
 }
 
-public Handler_say(pPlayerId)
+public hCommand_Say(pPlayerId) <HookChat_enabled>
 {
 	if(get_bit(g_bPunishedChatPlayers, pPlayerId))
 	{
@@ -174,6 +174,8 @@ public Handler_say(pPlayerId)
 
 	return PLUGIN_CONTINUE;
 }
+
+@hCommand_Say(){} 
 
 public Get_PunishPlayer(pPlayerId, const szPlayerName[])
 {
