@@ -1,7 +1,7 @@
 /*
 		Плагин: Bad Name Detector
 		Автор: wopox1337
-		Описание: Описание: Игрокам с не допустимыми именами блокируется чат и микрофон.
+		Описание: Игрокам с не допустимыми именами блокируется чат и микрофон.
 			Имена берутся из файла '/amxmodx/configs/BadNames.ini"
 		
 		Квары: badname_punishtype [a|b|ab]
@@ -14,7 +14,7 @@ new const BADNAME_CONFIG[] = "/BadNames.ini";
 #include <amxmodx>
 #include <engine>
 
-new const VERSION[] = "0.0.1";
+new const VERSION[] = "0.0.2";
 
 #if AMXX_VERSION_NUM < 183
 const MAX_PLAYERS = 32;
@@ -59,8 +59,6 @@ public plugin_init()
 		
 		register_clcmd("say",		"hCommand_Say");
 		register_clcmd("say_team",	"hCommand_Say");
-		
-		state HookChat_enabled;
 	}
 	
 	if(!g_bitBlockFlags)
@@ -162,7 +160,7 @@ public client_disconnect(pPlayerId)
 	set_speak(pPlayerId, SPEAK_ALL);
 }
 
-public hCommand_Say(pPlayerId) <HookChat_enabled>
+public hCommand_Say(pPlayerId)
 {
 	if(get_bit(g_bPunishedChatPlayers, pPlayerId))
 	{
@@ -174,8 +172,6 @@ public hCommand_Say(pPlayerId) <HookChat_enabled>
 
 	return PLUGIN_CONTINUE;
 }
-
-@hCommand_Say(){} 
 
 public Get_PunishPlayer(pPlayerId, const szPlayerName[])
 {
