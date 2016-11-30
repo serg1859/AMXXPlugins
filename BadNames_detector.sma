@@ -14,7 +14,7 @@ new const BADNAME_CONFIG[] = "/BadNames.ini";
 #include <amxmodx>
 #include <engine>
 
-new const VERSION[] = "0.0.3";
+new const VERSION[] = "0.0.3a";
 
 #if AMXX_VERSION_NUM < 183
 const MAX_NAME_LENGTH	= 32;
@@ -163,7 +163,7 @@ public hCommand_Say(pPlayerId)
 	if(get_bit(g_bPunishedChatPlayers, pPlayerId))
 	{
 		client_print(pPlayerId, print_chat, "[BLOCKED] Ваш чат заблокирован! Смените ник со стандартного для разблокировки чата!");
-		SendAudio(pPlayerId, "spk buttons/blip1.wav");
+		SendAudio(pPlayerId, "sound/buttons/blip1.wav");
 		
 		return PLUGIN_HANDLED;
 	}
