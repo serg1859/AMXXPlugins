@@ -1,41 +1,40 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <csdm>
 #include <fakemeta>
+#include <csdm>
 
 
 #define IsPlayer(%1)				(1 <= %1 <= g_iMaxPlayers)
 #define PlayerTask(%1)				(%1 + RESPAWN_TASK_ID)
 #define GetPlayerByTaskID(%1)		(%1 - RESPAWN_TASK_ID)
 
-new const g_szDefaultConfigFile[] = "config.ini"
-
 const Float:MIN_RESPAWN_TIME = 0.5
 const Float:MAX_RESPAWN_TIME = 15.0
 
-const RESPAWN_TASK_ID = 764212
+const RESPAWN_TASK_ID = 364815
 
-enum config_e
+enum config_s
 {
 	iSectionID,
 	iPluginID,
 	iPluginFuncID
 }
 
-enum forward_e
+enum forwardlist_e
 {
 	iFwdRestartRound,
 	iFwdPlayerSpawned,
 	iFwdPlayerKilled,
 	iFwdConfigLoad,
+	iFwdInitialized,
 	iFwdExecuteCVarVal,
 	iFwdGamemodeChanged
 }
 
 new HookChain:g_hFPlayerCanRespawn, HookChain:g_hTraceAttack
 new Array:g_aConfigData, Trie:g_tSections
-new g_eCustomForwards[forward_e]
+new g_eCustomForwards[forwardlist_e]
 new g_iIgnoreReturn, g_iMaxPlayers, g_iFwdEmitSound, g_iTotalItems
 
 new Float:g_flRespawnDelay = MIN_RESPAWN_TIME, GameTypes:g_iGamemode
@@ -45,7 +44,7 @@ new bool:g_bIsBot[MAX_CLIENTS + 1], bool:g_bFirstSpawn[MAX_CLIENTS + 1], g_iNumS
 
 public plugin_precache()
 {
-	g_aConfigData = ArrayCreate(config_e)
+	g_aConfigData = ArrayCreate(config_s)
 	g_tSections = TrieCreate()
 
 	g_eCustomForwards[iFwdRestartRound] = CreateMultiForward("CSDM_RestartRound", ET_IGNORE, FP_CELL)
@@ -53,6 +52,7 @@ public plugin_precache()
 	g_eCustomForwards[iFwdPlayerKilled] = CreateMultiForward("CSDM_PlayerKilled", ET_CONTINUE, FP_CELL, FP_CELL, FP_CELL)
 	g_eCustomForwards[iFwdConfigLoad] = CreateMultiForward("CSDM_ConfigurationLoad", ET_IGNORE, FP_CELL)
 	g_eCustomForwards[iFwdExecuteCVarVal] = CreateMultiForward("CSDM_ExecuteCVarValues", ET_IGNORE)
+	g_eCustomForwards[iFwdInitialized] = CreateMultiForward("CSDM_Initialized", ET_IGNORE, FP_STRING)
 	g_eCustomForwards[iFwdGamemodeChanged] = CreateMultiForward("CSDM_GamemodeChanged", ET_STOP, FP_CELL, FP_CELL)
 
 	LoadSettings()
@@ -69,34 +69,28 @@ public plugin_natives()
 
 public plugin_end()
 {
-	ArrayDestroy(g_aConfigData)
-	TrieDestroy(g_tSections)
-
-	DestroyForward(g_eCustomForwards[iFwdRestartRound])
-	DestroyForward(g_eCustomForwards[iFwdPlayerSpawned])
-	DestroyForward(g_eCustomForwards[iFwdPlayerKilled])
-	DestroyForward(g_eCustomForwards[iFwdConfigLoad])
-	DestroyForward(g_eCustomForwards[iFwdExecuteCVarVal])
+	if(g_tSections)
+		TrieDestroy(g_tSections)
 }
-
 
 public plugin_init()
 {
-	register_plugin("CSDM Core", CSDM_VERSION, "Vaqtincha")
+	register_plugin(CSDM_PLUGIN_NAME, CSDM_VERSION_STRING, "Vaqtincha")
 
-	DisableHookChain(g_hTraceAttack = RegisterHookChain(RG_CBasePlayer_TraceAttack, "CBasePlayer_TraceAttack", .post = false))
-	DisableHookChain(g_hFPlayerCanRespawn = RegisterHookChain(RG_CSGameRules_FPlayerCanRespawn, "CSGameRules_FPlayerCanRespawn", .post = false))
 	RegisterHookChain(RG_CSGameRules_RestartRound, "CSGameRules_RestartRound", .post = false)
 	RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", .post = false)
 	RegisterHookChain(RG_CBasePlayer_Killed, "CSGameRules_PlayerKilled", .post = false)
 	RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true)
 	RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true)
 	RegisterHookChain(RG_RoundEnd, "RoundEnd", .post = false)
+	DisableHookChain(g_hTraceAttack = RegisterHookChain(RG_CBasePlayer_TraceAttack, "CBasePlayer_TraceAttack", .post = false))
+	DisableHookChain(g_hFPlayerCanRespawn = RegisterHookChain(RG_CSGameRules_FPlayerCanRespawn, "CSGameRules_FPlayerCanRespawn", .post = false))
 
 	set_msg_block(get_user_msgid("HudTextArgs"), BLOCK_SET)
 	set_msg_block(get_user_msgid("ClCorpse"), BLOCK_SET)
 
 	g_iMaxPlayers = get_maxplayers()
+	ExecuteForward(g_eCustomForwards[iFwdInitialized], g_iIgnoreReturn, CSDM_VERSION_STRING)
 }
 
 public plugin_cfg()
@@ -148,7 +142,7 @@ public native_register_config(iPlugin, iParams)
 		return INVALID_INDEX
 	}
 
-	new eArrayData[config_e], szHandler[64], szSection[32]
+	new eArrayData[config_s], szHandler[64], szSection[32]
 
 	get_string(1, szSection, charsmax(szSection))
 	if(!szSection[0])
@@ -368,7 +362,7 @@ public SetCVarValues()
 
 LoadSettings(const ReadTypes:iReadAction = CFG_READ)
 {
-	new szLineData[64], eArrayData[config_e], pFile, iItemIndex = INVALID_INDEX, bool:bMainSettings
+	new szLineData[64], eArrayData[config_s], pFile, iItemIndex = INVALID_INDEX, bool:bMainSettings
 	new szKey[32], szValue[10], szSign[2]
 
 	if(!(pFile = OpenConfigFile()))
@@ -447,32 +441,33 @@ OpenConfigFile()
 	else
 		copyc(szMapPrefix, charsmax(szMapPrefix), szMapName, '_')
 
-	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/extraconfigs/%s.ini", szConfigDir, g_szDirectory, szMapName)
+	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/%s/%s.ini", szConfigDir, g_szMainDir, g_szExtraCfgDir, szMapName)
 	if((pFile = fopen(szConfigFile, "rt"))) // extra config
 	{
 		server_print("[CSDM] Extra map config successfully loaded for map ^"%s^"", szMapName)
 		return pFile
 	}
 
-	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/extraconfigs/prefix_%s.ini", szConfigDir, g_szDirectory, szMapPrefix)
+	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/%s/prefix_%s.ini", szConfigDir, g_szMainDir, g_szExtraCfgDir, szMapPrefix)
 	if((pFile = fopen(szConfigFile, "rt"))) // prefix config
 	{
 		server_print("[CSDM] Prefix ^"%s^" map config successfully loaded for map ^"%s^"", szMapPrefix, szMapName)
 		return pFile
 	}
 
-	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/%s", szConfigDir, g_szDirectory, g_szDefaultConfigFile)
+	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/%s", szConfigDir, g_szMainDir, g_szDefaultCfgFile)
 	if((pFile = fopen(szConfigFile, "rt"))) // default config
 	{
 		server_print("[CSDM] Default config successfully loaded.")		
 		return pFile
 	}
 
+	ExecuteForward(g_eCustomForwards[iFwdInitialized], g_iIgnoreReturn, "")
 	CSDM_SetFailState("[CSDM] ERROR: Config file ^"%s^" not found!", szConfigFile)
 	return 0
 }
 
-PluginCallFunc(const eArrayData[config_e], const szLineData[])
+PluginCallFunc(const eArrayData[config_s], const szLineData[])
 {
 	if(callfunc_begin_i(eArrayData[iPluginFuncID], eArrayData[iPluginID]) == INVALID_HANDLE)
 	{
@@ -506,8 +501,4 @@ CheckForwards()
 		g_iFwdEmitSound = 0
 	}
 }
-
-
-
-
 

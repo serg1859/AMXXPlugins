@@ -28,16 +28,22 @@
 	#include <reapi>
 #endif
 
-stock const g_szDirectory[] = "csdm"
-stock const CSDM_VERSION[] = "0.0.1b"
-const CSDM_VERSION_NUM = 1
+const CSDM_VERSION_NUM = 002
+stock const CSDM_VERSION_STRING[] = "0.0.2b"
+stock const CSDM_PLUGIN_NAME[] = "CSDM Core"
 
-const INVALID_INDEX = -1
+stock const g_szMainDir[] = "csdm"
+stock const g_szExtraCfgDir[] = "extraconfigs"
+stock const g_szSpawnDir[] = "spawns"
+
+stock const g_szDefaultCfgFile[] = "config.ini"
+
 const MAX_CONFIG_PATH_LEN =	128
+
 
 enum ReadTypes
 {
-	CFG_READ = 0,
+	CFG_READ,
 	CFG_RELOAD
 }
 
@@ -57,8 +63,22 @@ enum EquipTypes
 	FREE_BUY
 }
 
+enum ColorTypes
+{
+	DONT_CHANGE = 0,
+	RED,
+	BLUE,
+	GREY	
+}
+
+
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ FORWARDS ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
+/** Called when CSDM initializes.
+*
+* @param szVersion			It passes in a version string, or a blank string if some load failure occurred.
+*/
+forward CSDM_Initialized(const szVersion[])
 
 /** Called when CSDM is ready to accept config hooks.
 *
@@ -72,12 +92,12 @@ forward CSDM_ExecuteCVarValues()
 
 /** Called right before gamemode change.
 *
-* @param CurrentMode		Current gameplay mode
-* @param NewMode			Changed to
+* @param iCurrentMode		Current gameplay mode
+* @param iNewMode			Changed to
 *
 * @note						return PLUGIN_HANDLED will block change
 */
-forward CSDM_GamemodeChanged(const GameTypes:CurrentMode, const GameTypes:NewMode)
+forward CSDM_GamemodeChanged(const GameTypes:iCurrentMode, const GameTypes:iNewMode)
 
 /** Called right before round is restarted.
 *
@@ -139,11 +159,11 @@ native GameTypes:CSDM_GetGamemode()
 
 /** Sets gameplay mode.
 *
-* @param Mode				See enum GameTypes
+* @param iNewMode			See enum GameTypes
 *
 * @return 					Failed/Seccess
 */
-native bool:CSDM_SetGamemode(const GameTypes:Mode)
+native bool:CSDM_SetGamemode(const GameTypes:iNewMode)
 
 
 
@@ -151,10 +171,30 @@ native bool:CSDM_SetGamemode(const GameTypes:Mode)
 
 #define IsPlayerDead(%1)			(is_user_connected(%1) && get_entvar(%1, var_deadflag) != DEAD_NO)
 #define IsValidTeam(%1) 			(TEAM_TERRORIST <= get_member(%1, m_iTeam) <= TEAM_CT)
+#define IsValidWeaponID(%1) 		(any:WEAPON_P228 <= %1 <= any:WEAPON_P90 && !(INVALID_WEAPONS_BS & (1<<any:%1)))
 #define ContainFlag(%1,%2) 			(containi(%1,%2) != -1)
 #define ArraySet(%1,%2)				arrayset(_:%1, _:%2, sizeof(%1))
 #define ParseConfigKey(%1,%2,%3,%4) (parse(%1, %2, charsmax(%2), %3, charsmax(%3), %4, charsmax(%4)) == 3 && %3[0] == '=')
-#define CSDM_LOADED()				(is_plugin_loaded("CSDM Core") != INVALID_PLUGIN_ID)
+#define CSDM_LOADED()				(is_plugin_loaded(CSDM_PLUGIN_NAME) != INVALID_PLUGIN_ID)
+#define Vector(%1,%2,%3)			(Float:{%1.0, %2.0, %3.0})
+#define VECTOR_ZERO 				Float:{0.0, 0.0, 0.0}
+#define GetEntityKeyID(%1)			get_entvar(%1, var_impulse)
+#define SetEntityKeyID(%1,%2)		set_entvar(%1, var_impulse, %2)
+
+const GRENADE_BS = ((1<<_:WEAPON_HEGRENADE)|(1<<_:WEAPON_SMOKEGRENADE)|(1<<_:WEAPON_FLASHBANG))
+const INVALID_WEAPONS_BS = ((1<<_:WEAPON_NONE)|(1<<_:WEAPON_GLOCK)|(1<<_:WEAPON_KNIFE)|(1<<_:WEAPON_C4))
+
+const INVALID_INDEX = -1
+const FORCE_VIEW_ANGLES = 1
+const COLOR_CLIENT_INDEX = 34
+
+stock const g_szTeamNames[ColorTypes][] =
+{
+	"UNASSIGNED",
+	"TERRORIST",
+	"CT",
+	"SPECTATOR"
+}
 
 stock const g_szGamemodes[GameTypes][] = 
 {
@@ -178,11 +218,6 @@ stock const g_iMaxBPAmmo[any:WEAPON_P90 + 1] =
 	100, 120, 30, 120, 200, 32, 90, 120, 90, 2, 35, 90, 90, -1, 100
 }
 
-stock CSDM_GetGamemodeName(const GameTypes:Mode, szName[], iLen)
-{
-	formatex(szName, iLen, "%s", (NORMAL_HIT <= Mode <= AUTO_HEALER) ? g_szGamemodes[Mode] : "UNKNOWN")
-}
-
 stock CSDM_SetFailState(const szMessage[], any:...)
 {
 	new szErrorMsg[191]
@@ -191,23 +226,62 @@ stock CSDM_SetFailState(const szMessage[], any:...)
 	set_fail_state(szErrorMsg)
 }
 
-stock CSDM_PrintChat(const pPlayer, const szMessage[], any:...)
+stock CSDM_PrintChat(const pPlayer, const ColorTypes:color, const fmt[], any:...)
 {
 	if(!is_user_connected(pPlayer))
 		return
 
-	static szMsg[191], iMsgIdSayText
-	vformat(szMsg, charsmax(szMsg), szMessage, 3)
-
-	if(iMsgIdSayText || (iMsgIdSayText = get_user_msgid("SayText")))
+	new szMessage[191]
+	if(numargs() == 3)
 	{
-		message_begin(MSG_ONE, iMsgIdSayText, .player = pPlayer)
-		write_byte(pPlayer)
-		write_string(szMsg)
+		copy(szMessage, charsmax(szMessage), fmt)
+	}
+	else
+	{
+		vformat(szMessage, charsmax(szMessage), fmt, 4)
+	}
+
+	if(get_member(pPlayer, m_iTeam) != color && color != DONT_CHANGE)
+	{
+		SendTeamInfo(pPlayer, g_szTeamNames[color])
+		SendSayText(pPlayer, szMessage, true)
+	}
+	else
+	{
+		SendSayText(pPlayer, szMessage)
+	}
+}
+
+stock SendTeamInfo(const pPlayer, const szTeam[])
+{
+	static iMsgIdTeamInfo
+	if(iMsgIdTeamInfo || (iMsgIdTeamInfo = get_user_msgid("TeamInfo")))
+	{
+		message_begin(MSG_ONE, iMsgIdTeamInfo, .player = pPlayer)
+		write_byte(COLOR_CLIENT_INDEX)
+		write_string(szTeam)
 		message_end()
 	}
 }
 
-
-
-
+stock SendSayText(const pPlayer, szMessage[], const bool:bColored = false)
+{
+	static iMsgIdSayText
+	if(iMsgIdSayText || (iMsgIdSayText = get_user_msgid("SayText")))
+	{
+		message_begin(MSG_ONE, iMsgIdSayText, .player = pPlayer)
+		write_byte(bColored ? COLOR_CLIENT_INDEX : pPlayer)
+		if(szMessage[0] > 4)
+		{
+			write_byte(1)
+			szMessage[192 - 2 - 1] = 0	// Two write_byte + string terminator
+			write_string(szMessage)
+		}
+		else
+		{
+			szMessage[192 - 1 - 1] = 0	// One write_byte + string terminator
+			write_string(szMessage)
+		}
+		message_end()
+	}
+}

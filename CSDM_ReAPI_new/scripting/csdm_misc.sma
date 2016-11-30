@@ -1,8 +1,8 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <csdm>
 #include <hamsandwich>
+#include <csdm>
 
 
 #define IsPlayer(%1)				(1 <= (%1) <= g_iMaxPlayers)
@@ -22,12 +22,16 @@ enum
 
 new const g_szWeaponList[][] = 
 {
-	"weapon_m4a1", "weapon_usp", "weapon_famas", "weapon_glock18"
+	"weapon_m4a1", 
+	"weapon_usp",
+	"weapon_famas", 
+	"weapon_glock18"
 }
 
 new HamHook:g_hSecondaryAttack[sizeof(g_szWeaponList)], HamHook:g_hAddToPlayer[sizeof(g_szWeaponList)]
+
 new g_bWeaponState[MAX_CLIENTS + 1]
-new g_iMaxPlayers, g_iMsgIdHideWeapon, g_iMsgHookHideWeapon
+new g_iMaxPlayers
 
 new bool:g_bWeaponStateRemember = true, bool:g_bRefillBPammo = true
 new g_bitHideHudFlags, g_iRefillClip = 1
@@ -35,7 +39,7 @@ new g_bitHideHudFlags, g_iRefillClip = 1
 
 public plugin_init()
 {
-	register_plugin("CSDM Misc", CSDM_VERSION, "Vaqtincha")
+	register_plugin("CSDM Misc", CSDM_VERSION_STRING, "Vaqtincha")
 
 	for(new i = 0; i < sizeof(g_szWeaponList); i++)
 	{
@@ -43,13 +47,18 @@ public plugin_init()
 		DisableHamForward(g_hSecondaryAttack[i] = RegisterHam(Ham_Weapon_SecondaryAttack, g_szWeaponList[i], "CBasePlayerWeapon_SecAttack", .Post = true))
 	}
 
-	g_iMsgIdHideWeapon = get_user_msgid("HideWeapon")
 	g_iMaxPlayers = get_maxplayers()
 }
 
 public plugin_cfg()
 {
 	CheckForwards()
+}
+
+public CSDM_Initialized(const szVersion[])
+{
+	if(!szVersion[0])
+		pause("ad")
 }
 
 public CSDM_ConfigurationLoad(const ReadTypes:iReadAction)
@@ -72,20 +81,23 @@ public client_putinserver(pPlayer)
 
 public CSDM_PlayerKilled(const pVictim, const pKiller, const HitBoxGroup:iLastHitGroup)
 {
-	if(!g_iRefillClip || pVictim == pKiller || !pKiller)
+	if(!g_iRefillClip || !pKiller)
 		return
 
-	switch(g_iRefillClip)
+	if(pVictim != pKiller && is_user_alive(pKiller))
 	{
-		case 1:
+		switch(g_iRefillClip)
 		{
-			new pActiveWeapon = get_member(pKiller, m_pActiveItem)
-			if(pActiveWeapon != NULLENT)
+			case 1:
 			{
-				rg_instant_reload_weapons(pKiller, pActiveWeapon)
+				new pActiveWeapon = get_member(pKiller, m_pActiveItem)
+				if(pActiveWeapon != NULLENT)
+				{
+					rg_instant_reload_weapons(pKiller, pActiveWeapon)
+				}
 			}
+			case 2:	rg_instant_reload_weapons(pKiller, 0)
 		}
-		case 2:	rg_instant_reload_weapons(pKiller, 0)
 	}
 }
 
@@ -156,6 +168,12 @@ public ReadCfg(szLineData[], const iSectionID)
 
 CheckForwards()
 {
+	static iMsgIdHideWeapon, iMsgHookHideWeapon
+	if(!iMsgIdHideWeapon)
+	{
+		iMsgIdHideWeapon = get_user_msgid("HideWeapon")
+	}
+
 	for(new i = 0; i < sizeof(g_szWeaponList); i++)
 	{
 		if(g_bWeaponStateRemember)
@@ -170,14 +188,14 @@ CheckForwards()
 		}	
 	}
 
-	if(g_bitHideHudFlags && !g_iMsgHookHideWeapon)
+	if(g_bitHideHudFlags && !iMsgHookHideWeapon)
 	{
-		g_iMsgHookHideWeapon = register_message(g_iMsgIdHideWeapon, "Message_HideWeapon")
+		iMsgHookHideWeapon = register_message(iMsgIdHideWeapon, "Message_HideWeapon")
 	}
-	else if(!g_bitHideHudFlags && g_iMsgHookHideWeapon)
+	else if(!g_bitHideHudFlags && iMsgHookHideWeapon)
 	{
-		unregister_message(g_iMsgIdHideWeapon, g_iMsgHookHideWeapon)
-		g_iMsgHookHideWeapon = 0
+		unregister_message(iMsgIdHideWeapon, iMsgHookHideWeapon)
+		iMsgHookHideWeapon = 0
 	}
 }
 

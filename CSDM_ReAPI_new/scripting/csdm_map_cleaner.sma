@@ -1,8 +1,8 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <csdm>
 #include <fakemeta>
+#include <csdm>
 
 
 #define REMOVE_ENTITY(%1) 		engfunc(EngFunc_RemoveEntity, %1)
@@ -64,15 +64,20 @@ public plugin_precache()
 	}
 }
 
+public CSDM_Initialized(const szVersion[])
+{
+	if(!szVersion[0])
+		pause("ad")
+}
+
 public CSDM_ConfigurationLoad(const ReadTypes:iReadAction)
 {
 	CSDM_RegisterConfig("mapcleaner", "ReadCfg")
 }
 
-
 public plugin_init()
 {
-	register_plugin("CSDM Map Cleaner", CSDM_VERSION, "Vaqtincha")	
+	register_plugin("CSDM Map Cleaner", CSDM_VERSION_STRING, "Vaqtincha")	
 
 	if(g_iFwdEntitySpawn)
 		unregister_forward(FM_Spawn, g_iFwdEntitySpawn)
@@ -186,8 +191,8 @@ CreateBuyZone()
 	new pEntity = rg_create_entity("func_buyzone")
 	if(!is_nullent(pEntity))
 	{
-		// engfunc(EngFunc_SetSize, pEntity, {-1.0, -1.0, -1.0}, {1.0, 1.0, 1.0})
-		// engfunc(EngFunc_SetOrigin, pEntity, Float:{0.0, 0.0, 0.0})
+		// engfunc(EngFunc_SetSize, pEntity, Vector(-1, -1, -1), Vector(1, 1, 1))
+		// engfunc(EngFunc_SetOrigin, pEntity, VECTOR_ZERO)
 		set_entvar(pEntity, var_solid, SOLID_NOT)
 	}
 }

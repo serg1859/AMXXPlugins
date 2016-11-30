@@ -1,23 +1,20 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <csdm>
 #include <fakemeta>
+#include <csdm>
 
 
 #define REMOVE_ENTITY(%1) 			engfunc(EngFunc_RemoveEntity, %1)
 #define SPAWN_ENTITY(%1) 			dllfunc(DLLFunc_Spawn, %1)
+#define SET_ORIGIN(%1,%2) 			engfunc(EngFunc_SetOrigin, %1, %2)
+#define SET_SIZE(%1,%2,%3) 			engfunc(EngFunc_SetSize, %1, %2, %3)
+#define IsPlayerNotUsed(%1)			(g_iPreviousSecondary[%1] == INVALID_INDEX && g_iPreviousPrimary[%1] == INVALID_INDEX)
 
-#define IsPlayerNotUsed(%1)		(g_iPreviousSecondary[%1] == INVALID_INDEX && g_iPreviousPrimary[%1] == INVALID_INDEX)
-#define IsValidWeaponID(%1) 	(WEAPON_P228 <= %1 <= WEAPON_P90 && !(INVALID_WEAPONS_BS & (1<<any:%1)))
-
-const CSDM_BUYZONE	= -19191
 const FREE_BUY_MODE_MONEY = 16000
+const CSDM_BUYZONE_KEY	= 71952486
 
-const GRENADE_BS = ((1<<_:WEAPON_HEGRENADE)|(1<<_:WEAPON_SMOKEGRENADE)|(1<<_:WEAPON_FLASHBANG))
-const INVALID_WEAPONS_BS = ((1<<_:WEAPON_NONE)|(1<<_:WEAPON_GLOCK)|(1<<_:WEAPON_KNIFE)|(1<<_:WEAPON_C4))
-
-enum equip_data_e
+enum equip_data_s
 {
 	szWeaponName[20],
 	szDisplayName[64],
@@ -26,7 +23,7 @@ enum equip_data_e
 	WeaponIdType:iWeaponID
 }
 
-enum array_data_e
+enum arraylist_e
 {
 	Array:Autoitems,
 	Array:Primary,
@@ -53,7 +50,7 @@ new const g_szValidItemNames[][] =
 }
 
 new HookChain:g_hGiveDefaultItems, HookChain:g_hGiveNamedItem
-new Array:g_aArrays[array_data_e], Trie:g_tCheckItemName
+new Array:g_aArrays[arraylist_e], Trie:g_tCheckItemName
 new g_iPreviousSecondary[MAX_CLIENTS + 1], g_iPreviousPrimary[MAX_CLIENTS + 1], bool:g_bOpenMenu[MAX_CLIENTS + 1]
 
 new g_iSecondarySection, g_iPrimarySection, g_iBotSecondarySection, g_iBotPrimarySection
@@ -61,13 +58,12 @@ new g_iNumPrimary, g_iNumSecondary, g_iNumBotPrimary, g_iNumBotSecondary, g_iNum
 
 new g_iEquipMenuID, g_iEquipMenuCB, g_iSecondaryMenuID, g_iPrimaryMenuID
 new EquipTypes:g_iEquipMode = EQUIP_MENU, bool:g_bBlockDefaultItems = true
-
+new bool:g_bHasMapParameters
 
 public plugin_init()
 {
-	register_plugin("CSDM Equip Manager", CSDM_VERSION, "Vaqtincha")
+	register_plugin("CSDM Equip Manager", CSDM_VERSION_STRING, "Vaqtincha")
 
-	// register_clcmd("say /buy", "ClCmd_EnableMenu")
 	register_clcmd("say /guns", "ClCmd_EnableMenu")
 	register_clcmd("say guns", "ClCmd_EnableMenu")
 	register_clcmd("say_team /guns", "ClCmd_EnableMenu")
@@ -75,6 +71,14 @@ public plugin_init()
 
 	DisableHookChain(g_hGiveDefaultItems = RegisterHookChain(RG_CBasePlayer_GiveDefaultItems, "CBasePlayer_GiveDefaultItems", .post = false))
 	DisableHookChain(g_hGiveNamedItem = RegisterHookChain(RG_CBasePlayer_GiveNamedItem, "CBasePlayer_GiveNamedItem", .post = true))
+
+	g_bHasMapParameters = bool:rg_find_ent_by_class(NULLENT, "info_map_parameters")
+}
+
+public CSDM_Initialized(const szVersion[])
+{
+	if(!szVersion[0])
+		pause("ad")
 }
 
 public plugin_cfg()
@@ -85,21 +89,17 @@ public plugin_cfg()
 
 public plugin_end()
 {
-	TrieDestroy(g_tCheckItemName)
-	ArrayDestroy(g_aArrays[Autoitems])
-	ArrayDestroy(g_aArrays[Secondary])
-	ArrayDestroy(g_aArrays[Primary])
-	ArrayDestroy(g_aArrays[BotSecondary])
-	ArrayDestroy(g_aArrays[BotPrimary])
+	if(g_tCheckItemName)
+		TrieDestroy(g_tCheckItemName)
 }
 
 // API
-public EquipTypes:call_get_equip_mode()
+public EquipTypes:get_equip_mode()
 {
 	return g_iEquipMode
 }
 
-public call_set_equip_mode(const iNewEquipmode)
+public set_equip_mode(const iNewEquipmode)
 {
 	g_iEquipMode = EquipTypes:clamp(iNewEquipmode, _:AUTO_EQUIP, _:FREE_BUY)
 	CheckForwards()
@@ -117,11 +117,11 @@ public CSDM_ConfigurationLoad(const ReadTypes:iReadAction)
 		}
 	}
 
-	g_aArrays[Autoitems] = ArrayCreate(equip_data_e)
-	g_aArrays[Secondary] = ArrayCreate(equip_data_e)
-	g_aArrays[Primary] = ArrayCreate(equip_data_e)
-	g_aArrays[BotSecondary] = ArrayCreate(equip_data_e)
-	g_aArrays[BotPrimary] = ArrayCreate(equip_data_e)
+	g_aArrays[Autoitems] = ArrayCreate(equip_data_s)
+	g_aArrays[Secondary] = ArrayCreate(equip_data_s)
+	g_aArrays[Primary] = ArrayCreate(equip_data_s)
+	g_aArrays[BotSecondary] = ArrayCreate(equip_data_s)
+	g_aArrays[BotPrimary] = ArrayCreate(equip_data_s)
 
 	CSDM_RegisterConfig("equip", "ReadCfg_Settings")
 	CSDM_RegisterConfig("autoitems", "ReadCfg_AutoItems")
@@ -135,8 +135,7 @@ public CSDM_ExecuteCVarValues()
 {
 	if(g_iEquipMode == FREE_BUY)
 	{
-		set_cvar_num("mp_buytime", 999999)
-		// set_cvar_num("mp_buytime", -1) // BUG ReGameDLL
+		set_cvar_num("mp_buytime", 999999) // set_cvar_num("mp_buytime", -1) // BUG ReGameDLL	
 	}
 }
 
@@ -151,7 +150,6 @@ public CSDM_RestartRound(const bool:bNewGame)
 	{
 		pPlayer = iPlayers[iCount]
 		// g_iPreviousSecondary[pPlayer] = g_iPreviousPrimary[pPlayer] = INVALID_INDEX // reset all
-
 		if(get_member(pPlayer, m_bNotKilled))
 		{
 			rg_remove_all_items(pPlayer)
@@ -177,10 +175,10 @@ public ClCmd_EnableMenu(const pPlayer)
 	}
 	if(g_bOpenMenu[pPlayer])
 	{
-		CSDM_PrintChat(pPlayer, "^4[CSDM] ^3Your ^1equip menu is already enabled.")
+		CSDM_PrintChat(pPlayer, RED, "^4[CSDM] ^3Your equip menu is already enabled!")
 		return PLUGIN_HANDLED
 	}
-	CSDM_PrintChat(pPlayer, "^4[CSDM] ^1Gun menu will be re-enabled next spawn.")
+	CSDM_PrintChat(pPlayer, BLUE, "^4[CSDM] ^3Gun menu will be re-enabled next spawn.")
 	g_bOpenMenu[pPlayer] = true
 
 	return PLUGIN_HANDLED
@@ -191,7 +189,6 @@ public CSDM_PlayerSpawned(const pPlayer, const bool:bIsBot, const iNumSpawns)
 	if(g_iEquipMode == FREE_BUY)
 	{
 		rg_add_account(pPlayer, FREE_BUY_MODE_MONEY, AS_SET)
-
 		if(g_bBlockDefaultItems) // already gived by default ?
 		{
 			rg_give_item(pPlayer, "weapon_knife")
@@ -272,7 +269,7 @@ public EquipMenuHandler(const pPlayer, const iMenu, const iItem)
 			PreviousWeapons(pPlayer, g_aArrays[Secondary], g_iPreviousSecondary[pPlayer])
 			PreviousWeapons(pPlayer, g_aArrays[Primary], g_iPreviousPrimary[pPlayer])
 
-			CSDM_PrintChat(pPlayer, "^4[CSDM] ^1say ^4guns ^1to re-enable the gun menu.")
+			CSDM_PrintChat(pPlayer, GREY, "^4[CSDM] ^3say ^1guns ^3to re-enable the gun menu.")
 			g_bOpenMenu[pPlayer] = false
 		}
 		case 4:
@@ -310,7 +307,7 @@ public SecondaryMenuHandler(const pPlayer, const iMenu, const iItem)
 	new szNum[3], iAccess, hCallback
 	menu_item_getinfo(iMenu, iItem, iAccess, szNum, charsmax(szNum), _, _, hCallback)
 
-	new eWeaponData[equip_data_e], iItemIndex = str_to_num(szNum)
+	new eWeaponData[equip_data_s], iItemIndex = str_to_num(szNum)
 	ArrayGetArray(g_aArrays[Secondary], iItemIndex, eWeaponData)
 
 	GiveWeapon(pPlayer, eWeaponData)
@@ -329,7 +326,7 @@ public PrimaryMenuHandler(const pPlayer, const iMenu, const iItem)
 	new szNum[3], iAccess, hCallback
 	menu_item_getinfo(iMenu, iItem, iAccess, szNum, charsmax(szNum), _, _, hCallback)
 
-	new eWeaponData[equip_data_e], iItemIndex = str_to_num(szNum)
+	new eWeaponData[equip_data_s], iItemIndex = str_to_num(szNum)
 	ArrayGetArray(g_aArrays[Primary], iItemIndex, eWeaponData)
 
 	GiveWeapon(pPlayer, eWeaponData)
@@ -357,7 +354,7 @@ public ReadCfg_Settings(szLineData[], const iSectionID)
 
 public ReadCfg_AutoItems(szLineData[], const iSectionID)
 {
-	new szClassName[20], szTeam[4], szAmount[4], eWeaponData[equip_data_e]
+	new szClassName[20], szTeam[4], szAmount[4], eWeaponData[equip_data_s]
 	if(parse(szLineData, szClassName, charsmax(szClassName), szTeam, charsmax(szTeam), szAmount, charsmax(szAmount)) != 3)
 		return
 
@@ -375,7 +372,7 @@ public ReadCfg_AutoItems(szLineData[], const iSectionID)
 
 public ReadCfg_BotWeapons(szLineData[], const iSectionID)
 {
-	new eWeaponData[equip_data_e]
+	new eWeaponData[equip_data_s]
 	strtolower(szLineData)
 
 	if(!(eWeaponData[iWeaponID] = _:GetWeaponIndex(szLineData)))
@@ -397,7 +394,7 @@ public ReadCfg_BotWeapons(szLineData[], const iSectionID)
 
 public ReadCfg_MenuItems(szLineData[], const iSectionID)
 {
-	new szClassName[20], szMenuText[32], eWeaponData[equip_data_e]
+	new szClassName[20], szMenuText[32], eWeaponData[equip_data_s]
 	if(parse(szLineData, szClassName, charsmax(szClassName), szMenuText, charsmax(szMenuText)) != 2)
 		return
 
@@ -425,7 +422,7 @@ PreviousWeapons(const pPlayer, const Array:aArrayName, const iItemIndex)
 {
 	if(iItemIndex != INVALID_INDEX)
 	{
-		new eWeaponData[equip_data_e]
+		new eWeaponData[equip_data_s]
 		ArrayGetArray(aArrayName, iItemIndex, eWeaponData)
 		GiveWeapon(pPlayer, eWeaponData)
 	}
@@ -436,7 +433,7 @@ RandomWeapons(const pPlayer, const Array:aArrayName, const iArraySize)
 	if(!iArraySize)
 		return INVALID_INDEX
 	
-	new eWeaponData[equip_data_e], iRand = random(iArraySize)
+	new eWeaponData[equip_data_s], iRand = random(iArraySize)
 	ArrayGetArray(aArrayName, iRand, eWeaponData)
 	GiveWeapon(pPlayer, eWeaponData)
 	return iRand
@@ -447,7 +444,7 @@ AutoItems(const pPlayer)
 	if(!g_iNumAutoItems)
 		return
 
-	new eWeaponData[equip_data_e], i, TeamName:iPlayerTeam = get_member(pPlayer, m_iTeam)
+	new eWeaponData[equip_data_s], i, TeamName:iPlayerTeam = get_member(pPlayer, m_iTeam)
 	for(i = 0; i < g_iNumAutoItems; i++)
 	{
 		ArrayGetArray(g_aArrays[Autoitems], i, eWeaponData)
@@ -458,7 +455,7 @@ AutoItems(const pPlayer)
 	}
 }
 
-GiveWeapon(const pPlayer, eData[equip_data_e])
+GiveWeapon(const pPlayer, eData[equip_data_s])
 {
 	new WeaponIdType:iId = eData[iWeaponID]
 	rg_give_item_ex(pPlayer, eData[szWeaponName], iId, (GRENADE_BS & 1<<any:iId) ? GT_APPEND : GT_REPLACE)
@@ -517,7 +514,7 @@ AddItemsToMenu(const iMenu, const Array:aArrayName, const iArraySize)
 	if(!iArraySize)
 		return
 
-	new eWeaponData[equip_data_e], szNum[3], i
+	new eWeaponData[equip_data_s], szNum[3], i
 	for(i = 0; i < iArraySize; i++) 
 	{
 		ArrayGetArray(aArrayName, i, eWeaponData)
@@ -544,11 +541,21 @@ CheckForwards()
 		{
 			CreateBuyZone()
 		}
+		if(g_bHasMapParameters)
+		{
+			set_member_game(m_bCTCantBuy, false)
+			set_member_game(m_bTCantBuy, false)
+		}
 	}
 	else
 	{
 		DisableHookChain(g_hGiveNamedItem)
 		SetStateBuyZone(BUYZONE_TRIGGER_OFF)
+		if(g_bHasMapParameters)
+		{
+			set_member_game(m_bCTCantBuy, true)
+			set_member_game(m_bTCantBuy, true)
+		}
 	}
 }
 
@@ -559,10 +566,9 @@ CreateBuyZone()
 
 	if(!is_nullent(pEntity))
 	{
-		engfunc(EngFunc_SetSize, pEntity, Float:{-8191.0, -8191.0, -8191.0}, Float:{8191.0, 8191.0, 8191.0})
-		engfunc(EngFunc_SetOrigin, pEntity, Float:{0.0, 0.0, 0.0})
-		set_entvar(pEntity, var_iuser1, CSDM_BUYZONE)
-
+		SET_SIZE(pEntity, Vector(-8191, -8191, -8191), Vector(8191, 8191, 8191))
+		SET_ORIGIN(pEntity, VECTOR_ZERO)
+		SetEntityKeyID(pEntity, CSDM_BUYZONE_KEY)
 		return pEntity
 	}
 	return NULLENT
@@ -573,7 +579,7 @@ bool:SetStateBuyZone(const iAction)
 	new pEntity = NULLENT
 	while((pEntity = rg_find_ent_by_class(pEntity, "func_buyzone")))
 	{
-		if(get_entvar(pEntity, var_iuser1) != CSDM_BUYZONE)
+		if(GetEntityKeyID(pEntity) != CSDM_BUYZONE_KEY)
 			continue
 
 		switch(iAction)
@@ -586,7 +592,6 @@ bool:SetStateBuyZone(const iAction)
 	}
 	return false
 }
-
 
 // FixFix rg_give_item
 stock rg_give_item_ex(const index, const pszName[], any:iId, GiveType:type = GT_APPEND)

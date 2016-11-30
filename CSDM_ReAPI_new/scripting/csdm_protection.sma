@@ -15,7 +15,7 @@ const Float:MAX_PROTECTION_TIME = 25.0
 
 const PROTECTION_TASK_ID = 216897
 
-enum color_e { R, G, B }
+enum color_e { Float:R, Float:G, Float:B }
 
 enum 
 { 
@@ -30,16 +30,16 @@ new g_iMaxPlayers
 new Float:g_flRenderAlpha = 10.0, Float:g_flProtectionTime = 2.0, bool:g_bShowProtectionIcon
 new Float:g_flTeamColors[TeamName][color_e] = 
 {
-	{0, 0, 0},
-	{_:235.0, _:0.0, _:0.0}, // TEAM_TERRORIST
-	{_:0.0, _:0.0, _:235.0}, // TEAM_CT
-	{0, 0, 0}
+	{0.0, 0.0, 0.0},
+	{235.0, 0.0, 0.0}, // TEAM_TERRORIST
+	{0.0, 0.0, 235.0}, // TEAM_CT
+	{0.0, 0.0, 0.0}
 }
 
 
 public plugin_init()
 {
-	register_plugin("CSDM Protection", CSDM_VERSION, "Vaqtincha")
+	register_plugin("CSDM Protection", CSDM_VERSION_STRING, "Vaqtincha")
 
 	if(g_flProtectionTime > 0.0)
 	{
@@ -47,6 +47,12 @@ public plugin_init()
 	}
 
 	g_iMaxPlayers = get_maxplayers()
+}
+
+public CSDM_Initialized(const szVersion[])
+{
+	if(!szVersion[0])
+		pause("ad")
 }
 
 public CSDM_ConfigurationLoad(const ReadTypes:iReadAction)
@@ -175,11 +181,11 @@ stock SendStatusIcon(const pPlayer, iStatus = STATUSICON_HIDE, red = 0, green = 
 	}
 }
 
-stock rg_set_rendering(const index, fx = kRenderFxNone, Float:color[] = {0.0, 0.0, 0.0}, Float:amount = 0.0) 
+stock rg_set_rendering(const pEntity, const fx = kRenderFxNone, const Float:flColor[] = {0.0, 0.0, 0.0}, const Float:iAmount = 0.0)
 {
-	set_entvar(index, var_renderfx, fx)
-	set_entvar(index, var_rendercolor, color)
-	set_entvar(index, var_renderamt, amount)
+	set_entvar(pEntity, var_renderfx, fx)
+	set_entvar(pEntity, var_rendercolor, flColor)
+	set_entvar(pEntity, var_renderamt, iAmount)
 }
 
 
