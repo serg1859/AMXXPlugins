@@ -14,10 +14,10 @@ new const BADNAME_CONFIG[] = "/BadNames.ini";
 #include <amxmodx>
 #include <engine>
 
-new const VERSION[] = "0.0.2";
+new const VERSION[] = "0.0.3";
 
 #if AMXX_VERSION_NUM < 183
-const MAX_PLAYERS = 32;
+const MAX_NAME_LENGTH	= 32;
 #endif
 
 new Array:g_aBadNames, g_iBadNamesSize;
@@ -29,7 +29,6 @@ enum
 	BLOCK_CHAT		=	(1<<1)
 }
 
-
 new g_bPunishedChatPlayers;
 
 #define get_bit(%1,%2)		(%1 & (1 << (%2 & 31)))
@@ -37,7 +36,9 @@ new g_bPunishedChatPlayers;
 #define reset_bit(%1,%2)	(%1 &= ~(1 << (%2 & 31)))
 
 	//Thanks to Vaqtincha for this macros
-#define ContainFlag(%1,%2) 			(containi(%1,%2) != -1)
+#define ContainWord(%1,%2) 			(containi(%1,%2) != -1)
+
+new g_iMsgId_SendAudio;
 
 public plugin_init()
 {
@@ -49,16 +50,18 @@ public plugin_init()
 	new szCvarString[3];
 	get_cvar_string("badname_punishtype", szCvarString, charsmax(szCvarString))
 	
-	if(ContainFlag(szCvarString, "a"))
+	if(ContainWord(szCvarString, "a"))
 	{
 		g_bitBlockFlags |= BLOCK_VOICE
 	}
-	if(ContainFlag(szCvarString, "b"))
+	if(ContainWord(szCvarString, "b"))
 	{
 		g_bitBlockFlags |= BLOCK_CHAT
 		
 		register_clcmd("say",		"hCommand_Say");
 		register_clcmd("say_team",	"hCommand_Say");
+		
+		g_iMsgId_SendAudio = get_user_msgid("SendAudio");
 	}
 	
 	if(!g_bitBlockFlags)
@@ -68,7 +71,7 @@ public plugin_init()
 		set_fail_state(szMsg);
 	}
 
-	g_aBadNames = ArrayCreate(32);
+	g_aBadNames = ArrayCreate(MAX_NAME_LENGTH);
 }
 
 public plugin_cfg()
@@ -109,21 +112,9 @@ public plugin_cfg()
 	}
 }
 
-
-public client_putinserver(pPlayerId)
-{
-	if(is_user_bot(pPlayerId) || is_user_hltv(pPlayerId))
-	{
-		return;
-	}
-
-	CheckNickname(pPlayerId);
-}
-
 public client_infochanged(pPlayerId)
-
 {
-	if(!is_user_connected(pPlayerId))
+	if(!is_user_connected(pPlayerId) || is_user_bot(pPlayerId) || is_user_hltv(pPlayerId))
 	{
 		return PLUGIN_CONTINUE;
 	}
@@ -135,29 +126,36 @@ public client_infochanged(pPlayerId)
 
 public CheckNickname(pPlayerId)
 {
-	new szPlayerName[32];
-	get_user_name(pPlayerId, szPlayerName, charsmax(szPlayerName));
-	
-	new szSuspectedName[charsmax(szPlayerName)];
+	new szNewName[MAX_NAME_LENGTH], szOldName[MAX_NAME_LENGTH];
+	get_user_name(pPlayerId, szOldName, charsmax(szOldName));
+	get_user_info(pPlayerId, "name", szNewName, charsmax(szNewName));
 
-	for(new i; i < g_iBadNamesSize; i++)
+	if(equal(szNewName, szOldName))
+	{
+		return PLUGIN_CONTINUE;
+	}
+
+	for(new i, szSuspectedName[charsmax(szNewName)]; i < g_iBadNamesSize; i++)
 	{
 		ArrayGetString(g_aBadNames, i, szSuspectedName, charsmax(szSuspectedName));
 		
-		//if(equali(szPlayerName,szSuspectedName))
-		if(ContainFlag(szPlayerName,szSuspectedName))
+		//if(equali(szNewName,szSuspectedName))
+		if(ContainWord(szNewName,szSuspectedName))
 		{
-			Get_PunishPlayer(pPlayerId, szPlayerName);
-			break;
+			Get_PunishPlayer(pPlayerId, szNewName);
+
+			return PLUGIN_CONTINUE;
 		}
 	}
+
+	Reset_PunishBits(pPlayerId);
+
+	return PLUGIN_CONTINUE;
 }
 
 public client_disconnect(pPlayerId)
 {
 	reset_bit(g_bPunishedChatPlayers, pPlayerId);
-
-	set_speak(pPlayerId, SPEAK_ALL);
 }
 
 public hCommand_Say(pPlayerId)
@@ -165,7 +163,7 @@ public hCommand_Say(pPlayerId)
 	if(get_bit(g_bPunishedChatPlayers, pPlayerId))
 	{
 		client_print(pPlayerId, print_chat, "[BLOCKED] Ваш чат заблокирован! Смените ник со стандартного для разблокировки чата!");
-		client_cmd(pPlayerId, "spk buttons/blip1.wav");
+		SendAudio(pPlayerId, "spk buttons/blip1.wav");
 		
 		return PLUGIN_HANDLED;
 	}
@@ -185,16 +183,40 @@ public Get_PunishPlayer(pPlayerId, const szPlayerName[])
 	}
 
 	set_task(5.0, "task_ShowMessage", pPlayerId);
+	
+	// Логирование (temp)
 	log_to_file("BadNames_Detected.log", "Player: '%s'", szPlayerName);
 }
 
 public task_ShowMessage(pPlayerId)
 {
+	if(!is_user_connected(pPlayerId))
+	{
+		return PLUGIN_HANDLED;
+	}
+	
 	set_hudmessage(.red = 255, .x = 0.4, .y = -1.0, .effects = 1, .fxtime = 3.0, .holdtime = 5.0);
 	show_hudmessage(pPlayerId, "Вам заблокирован доступ к чату^nсмените ник для разблокировки!");
+	
+	return PLUGIN_CONTINUE;
 }
 
 public plugin_end()
 {
 	ArrayDestroy(g_aBadNames);
+}
+
+Reset_PunishBits(pPlayerId)
+{
+	reset_bit(g_bPunishedChatPlayers, pPlayerId);
+	set_speak(pPlayerId, SPEAK_ALL);
+}
+
+stock SendAudio(pPlayerId, const szDirSound[])
+{
+   message_begin(MSG_ONE_UNRELIABLE, g_iMsgId_SendAudio, .player = pPlayerId);
+   write_byte(pPlayerId);
+   write_string(szDirSound);
+   write_short(PITCH_NORM);
+   message_end();
 }
