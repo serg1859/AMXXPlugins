@@ -7,7 +7,7 @@
 
 #define IsPlayer(%1)				(1 <= (%1) <= g_iMaxPlayers)
 
-const HideWeapon_bitFlags = 1
+const HideWeapon_Flags = 1 	// "HideWeapon" msg argument
 
 enum
 {
@@ -129,29 +129,29 @@ public Message_HideWeapon(const iMsgId, const iMsgDest, const iMsgEntity)
 {
 	if(g_bitHideHudFlags)
 	{
-		set_msg_arg_int(HideWeapon_bitFlags, ARG_BYTE, get_msg_arg_int(HideWeapon_bitFlags) | g_bitHideHudFlags)
+		set_msg_arg_int(HideWeapon_Flags, ARG_BYTE, get_msg_arg_int(HideWeapon_Flags) | g_bitHideHudFlags)
 	}
 }
 
-public ReadCfg(szLineData[], const iSectionID)
+public ReadCfg(const szLineData[], const iSectionID)
 {
-	new szKey[32], szValue[16], szSign[2]
+	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN], szSign[2]
 	if(!ParseConfigKey(szLineData, szKey, szSign, szValue))
 		return
 
-	if(equal(szKey, "weaponstate_remember"))
+	if(equali(szKey, "weaponstate_remember"))
 	{
 		g_bWeaponStateRemember = bool:(str_to_num(szValue))
 	}
-	else if(equal(szKey, "refill_bpammo_weapons"))
+	else if(equali(szKey, "refill_bpammo_weapons"))
 	{
 		g_bRefillBPammo = bool:(str_to_num(szValue))
 	}
-	else if(equal(szKey, "refill_clip_weapons"))
+	else if(equali(szKey, "refill_clip_weapons"))
 	{
 		g_iRefillClip = clamp(str_to_num(szValue), 0, 2)
 	}
-	else if(equal(szKey, "hide_hud_flags"))
+	else if(equali(szKey, "hide_hud_flags"))
 	{
 		if(ContainFlag(szValue, "c"))
 			g_bitHideHudFlags |= HIDEHUD_CROSSHAIR
@@ -198,8 +198,6 @@ CheckForwards()
 		iMsgHookHideWeapon = 0
 	}
 }
-
-
 
 
 

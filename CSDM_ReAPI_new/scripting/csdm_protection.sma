@@ -8,8 +8,6 @@
 #define PlayerTask(%1)				(%1 + PROTECTION_TASK_ID)
 #define GetPlayerByTaskID(%1)		(%1 - PROTECTION_TASK_ID)
 
-new const g_szSpriteName[] = "suithelmet_full" // sprite name in hud.txt
-
 const Float:MAX_ALPHA_VALUE = 30.0
 const Float:MAX_PROTECTION_TIME = 25.0
 
@@ -27,7 +25,8 @@ enum
 new bool:g_bProtected[MAX_CLIENTS + 1]
 new g_iMaxPlayers
 
-new Float:g_flRenderAlpha = 10.0, Float:g_flProtectionTime = 2.0, bool:g_bShowProtectionIcon
+new g_szSpriteName[18] = "suithelmet_full"	// "suithelmet_empty" max lenght = 16
+new Float:g_flRenderAlpha = 10.0, Float:g_flProtectionTime = 2.0
 new Float:g_flTeamColors[TeamName][color_e] = 
 {
 	{0.0, 0.0, 0.0},
@@ -68,7 +67,7 @@ public client_putinserver(pPlayer)
 
 public CSDM_PlayerSpawned(const pPlayer, const bool:bIsBot, const iNumSpawns)
 {
-	if(iNumSpawns && g_flProtectionTime > 0.0)
+	if(g_flProtectionTime > 0.0)
 	{
 		SetProtection(pPlayer)
 	}
@@ -100,21 +99,21 @@ public TaskProtectionEnd(const iTaskID)
 	RemoveProtection(GetPlayerByTaskID(iTaskID))
 }
 
-public ReadCfg(szLineData[], const iSectionID)
+public ReadCfg(const szLineData[], const iSectionID)
 {
-	new szKey[32], szValue[16], szSign[2]
+	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN], szSign[2]
 	if(!ParseConfigKey(szLineData, szKey, szSign, szValue))
 		return
 
-	if(equal(szKey, "protection_time"))
+	if(equali(szKey, "protection_time"))
 	{
 		g_flProtectionTime = floatclamp(str_to_float(szValue), 0.0, MAX_PROTECTION_TIME)
 	}
-	else if(equal(szKey, "show_protection_icon"))
+	else if(equali(szKey, "sprite_name"))
 	{
-		g_bShowProtectionIcon = bool:(str_to_num(szValue))
+		copy(g_szSpriteName, charsmax(g_szSpriteName), szValue)
 	}
-	else if(contain(szKey, "render_color_") != -1)
+	else if(equali(szKey, "render_color_", 13) != -1)
 	{
 		new szRed[4], szGreen[4], szBlue[4]
 		new TeamName:iTeam = szKey[13] == 'c' ? TEAM_CT : TEAM_TERRORIST
@@ -126,12 +125,11 @@ public ReadCfg(szLineData[], const iSectionID)
 			g_flTeamColors[iTeam][B] = floatclamp(str_to_float(szBlue), 0.0, 255.0)	
 		}
 	}
-	else if(equal(szKey, "render_alpha"))
+	else if(equali(szKey, "render_alpha"))
 	{
 		g_flRenderAlpha = floatclamp(str_to_float(szValue), 0.0, MAX_ALPHA_VALUE)
 	}
 }
-
 
 SetProtection(const pPlayer)
 {
@@ -143,7 +141,7 @@ SetProtection(const pPlayer)
 	rg_set_rendering(pPlayer, kRenderFxGlowShell, g_flTeamColors[get_member(pPlayer, m_iTeam)], g_flRenderAlpha)
 	g_bProtected[pPlayer] = true
 
-	if(g_bShowProtectionIcon && g_flProtectionTime > 1.4)
+	if(g_szSpriteName[0] && g_flProtectionTime > 1.4)
 	{
 		SendStatusIcon(pPlayer, STATUSICON_FLASH)
 	}
@@ -159,7 +157,7 @@ RemoveProtection(const pPlayer)
 		set_entvar(pPlayer, var_takedamage, DAMAGE_AIM)
 		rg_set_rendering(pPlayer)
 
-		if(g_bShowProtectionIcon && g_flProtectionTime >= 2.0)
+		if(g_szSpriteName[0] && g_flProtectionTime >= 2.0)
 		{
 			SendStatusIcon(pPlayer)
 		}

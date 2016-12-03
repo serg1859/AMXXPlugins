@@ -2,9 +2,6 @@
  *
  * CSDM include file.
  *
- * Support forum:
- *		http://goldsrc.ru
- *
 */
 
 
@@ -28,8 +25,8 @@
 	#include <reapi>
 #endif
 
-const CSDM_VERSION_NUM = 002
-stock const CSDM_VERSION_STRING[] = "0.0.2b"
+const CSDM_VERSION_NUM = 003
+stock const CSDM_VERSION_STRING[] = "0.0.3b"
 stock const CSDM_PLUGIN_NAME[] = "CSDM Core"
 
 stock const g_szMainDir[] = "csdm"
@@ -37,8 +34,15 @@ stock const g_szExtraCfgDir[] = "extraconfigs"
 stock const g_szSpawnDir[] = "spawns"
 
 stock const g_szDefaultCfgFile[] = "config.ini"
+stock const g_szMainSection[] = "[settings]"
 
+// config
 const MAX_CONFIG_PATH_LEN =	128
+// configdata
+const MAX_LINE_LEN = 64
+const MAX_KEY_LEN = 32
+const MAX_VALUE_LEN = 32
+const MAX_SECTION_LEN = 32
 
 
 enum ReadTypes
@@ -105,8 +109,7 @@ forward CSDM_GamemodeChanged(const GameTypes:iCurrentMode, const GameTypes:iNewM
 */
 forward CSDM_RestartRound(const bool:bNewGame)
 
-/** 
-* Player spawned.
+/** Player spawned.
 *
 * @param pPlayer			Player id
 * @param bIsBot				Is player bot ?
@@ -116,8 +119,7 @@ forward CSDM_RestartRound(const bool:bNewGame)
 */
 forward CSDM_PlayerSpawned(const pPlayer, const bool:bIsBot, const iNumSpawns)
 
-/** 
-* Player killed.
+/** Player killed.
 *
 * @param pVictim			Victim id
 * @param pKiller			Killer id
@@ -133,7 +135,7 @@ forward CSDM_PlayerKilled(const pVictim, const pKiller, const HitBoxGroup:iLastH
 
 /** Read config section.
 *
-* forward params: public my_config_handler(szLineData[], const iSectionID)
+* forward params: public my_config_handler(const szLineData[], const iSectionID)
 *
 * @param szSectionName 		Section name defined in config.
 * @param szHandler 			Name of the handler function.
@@ -142,6 +144,33 @@ forward CSDM_PlayerKilled(const pVictim, const pKiller, const HitBoxGroup:iLastH
 * @return  					Index of section item. 
 */
 native CSDM_RegisterConfig(const szSectionName[], const szHandler[])
+
+/** Gets config keyvalue.
+*
+* @param szKey				Keyname
+* @param szValue			The variable to store the value in.	
+* @param iLen				Lenght
+*
+* @return					true/false
+*/
+native bool:CSDM_GetConfigKeyValue(const szKey[], szValue[], iLen)
+
+/** Is this player allowed to respawn now?
+*
+* @param pPlayer			0 = global value	
+*
+* @return					true/false
+*/
+native bool:CSDM_GetCanRespawn(const pPlayer = 0)
+
+/** Is this player allowed to respawn now? (true by default)
+*
+* @param pPlayer			0 = all
+* @param CanRespawn			true/false
+*
+* @noreturn
+*/
+native CSDM_SetCanRespawn(const pPlayer = 0, const bool:bCanRespawn)
 
 /** Respawn player.
 *
@@ -169,12 +198,16 @@ native bool:CSDM_SetGamemode(const GameTypes:iNewMode)
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ HELPER STUFF ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
+#define ContainFlag(%1,%2) 			(containi(%1, %2) != -1)
+#define ParseConfigKey(%1,%2,%3,%4) (parse(%1, %2, charsmax(%2), %3, charsmax(%3), %4, charsmax(%4)) == 3 && %3[0] == '=')
+#define IsCommentLine(%1) 			(%1[0] == ';' || %1[0] == '#' || (%1[0] == '/' && %1[1] == '/'))
+#define IsEmptyLine(%1) 			(%1[0] == EOS || !%1[0])
+
 #define IsPlayerDead(%1)			(is_user_connected(%1) && get_entvar(%1, var_deadflag) != DEAD_NO)
 #define IsValidTeam(%1) 			(TEAM_TERRORIST <= get_member(%1, m_iTeam) <= TEAM_CT)
 #define IsValidWeaponID(%1) 		(any:WEAPON_P228 <= %1 <= any:WEAPON_P90 && !(INVALID_WEAPONS_BS & (1<<any:%1)))
-#define ContainFlag(%1,%2) 			(containi(%1,%2) != -1)
+
 #define ArraySet(%1,%2)				arrayset(_:%1, _:%2, sizeof(%1))
-#define ParseConfigKey(%1,%2,%3,%4) (parse(%1, %2, charsmax(%2), %3, charsmax(%3), %4, charsmax(%4)) == 3 && %3[0] == '=')
 #define CSDM_LOADED()				(is_plugin_loaded(CSDM_PLUGIN_NAME) != INVALID_PLUGIN_ID)
 #define Vector(%1,%2,%3)			(Float:{%1.0, %2.0, %3.0})
 #define VECTOR_ZERO 				Float:{0.0, 0.0, 0.0}
@@ -224,6 +257,21 @@ stock CSDM_SetFailState(const szMessage[], any:...)
 	vformat(szErrorMsg, charsmax(szErrorMsg), szMessage, 2)
 
 	set_fail_state(szErrorMsg)
+}
+
+stock MakeDir(const szDirName[], bool:bPrint = true)
+{
+	if(!dir_exists(szDirName))
+	{
+		if(bPrint)
+		{
+			server_print("[CSDM] Directory %s not exist, will be created automatically.", szDirName)
+		}
+		if(mkdir(szDirName))
+		{
+			server_print("[CSDM] Failed to create directory %s", szDirName)
+		}
+	}
 }
 
 stock CSDM_PrintChat(const pPlayer, const ColorTypes:color, const fmt[], any:...)

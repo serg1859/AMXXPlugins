@@ -5,6 +5,8 @@
 #include <csdm>
 
 
+#define SET_ORIGIN(%1,%2) 		engfunc(EngFunc_SetOrigin, %1, %2)
+#define SET_SIZE(%1,%2,%3) 		engfunc(EngFunc_SetSize, %1, %2, %3)
 #define REMOVE_ENTITY(%1) 		engfunc(EngFunc_RemoveEntity, %1)
 #define ENTITY_THINK(%1) 		dllfunc(DLLFunc_Think, %1)
 #define IsPlayer(%1)			(1 <= %1 <= g_iMaxPlayers)
@@ -142,13 +144,13 @@ public Entity_Spawn(const pEntity)
 	return FMRES_IGNORED
 }
 
-public ReadCfg(szLineData[], const iSectionID)
+public ReadCfg(const szLineData[], const iSectionID)
 {	
-	new szKey[32], szValue[10], szSign[2]
+	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN], szSign[2]
 	if(!ParseConfigKey(szLineData, szKey, szSign, szValue))
 		return
 
-	if(equal(szKey, "remove_objective_flags"))
+	if(equali(szKey, "remove_objective_flags"))
 	{
 		if(ContainFlag(szValue, "a"))
 			g_bitRemoveObjects |= (func_vip_safetyzone|info_vip_start|func_escapezone)
@@ -163,11 +165,11 @@ public ReadCfg(szLineData[], const iSectionID)
 		if(ContainFlag(szValue, "w"))
 			g_bitRemoveObjects |= armoury_entity
 	}
-	else if(equal(szKey, "remove_dropped_weapons"))
+	else if(equali(szKey, "remove_dropped_weapons"))
 	{
 		g_bRemoveWeapons = bool:(str_to_num(szValue))
 	}
-	else if(equal(szKey, "exclude_bomb"))
+	else if(equali(szKey, "exclude_bomb"))
 	{
 		g_bExcludeBomb = bool:(str_to_num(szValue))
 	}
@@ -191,8 +193,8 @@ CreateBuyZone()
 	new pEntity = rg_create_entity("func_buyzone")
 	if(!is_nullent(pEntity))
 	{
-		// engfunc(EngFunc_SetSize, pEntity, Vector(-1, -1, -1), Vector(1, 1, 1))
-		// engfunc(EngFunc_SetOrigin, pEntity, VECTOR_ZERO)
+		// SET_SIZE(pEntity, Vector(-1, -1, -1), Vector(1, 1, 1))
+		// SET_ORIGIN(pEntity, VECTOR_ZERO)
 		set_entvar(pEntity, var_solid, SOLID_NOT)
 	}
 }

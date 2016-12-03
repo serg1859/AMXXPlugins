@@ -33,19 +33,20 @@ enum forwardlist_e
 }
 
 new HookChain:g_hFPlayerCanRespawn, HookChain:g_hTraceAttack
-new Array:g_aConfigData, Trie:g_tSections
+new Array:g_aConfigData, Trie:g_tConfigSections, Trie:g_tConfigValues
 new g_eCustomForwards[forwardlist_e]
 new g_iIgnoreReturn, g_iMaxPlayers, g_iFwdEmitSound, g_iTotalItems
 
 new Float:g_flRespawnDelay = MIN_RESPAWN_TIME, GameTypes:g_iGamemode
 new bool:g_bShowRespawnBar, bool:g_bFreeForAll, bool:g_bBlockGunpickupSound
 new bool:g_bIsBot[MAX_CLIENTS + 1], bool:g_bFirstSpawn[MAX_CLIENTS + 1], g_iNumSpawns[MAX_CLIENTS + 1]
-
+new bool:g_bFPlayerCanRespawn[MAX_CLIENTS + 1], bool:g_bAllowRespawn = true
 
 public plugin_precache()
 {
 	g_aConfigData = ArrayCreate(config_s)
-	g_tSections = TrieCreate()
+	g_tConfigSections = TrieCreate()
+	g_tConfigValues = TrieCreate()
 
 	g_eCustomForwards[iFwdRestartRound] = CreateMultiForward("CSDM_RestartRound", ET_IGNORE, FP_CELL)
 	g_eCustomForwards[iFwdPlayerSpawned] = CreateMultiForward("CSDM_PlayerSpawned", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL)
@@ -58,10 +59,14 @@ public plugin_precache()
 	LoadSettings()
 }
 
+
 public plugin_natives()
 {
 	register_library("csdm_core")
 	register_native("CSDM_RegisterConfig", "native_register_config")
+	register_native("CSDM_GetConfigKeyValue", "native_get_config_keyvalue")
+	register_native("CSDM_GetCanRespawn", "native_get_can_respawn")
+	register_native("CSDM_SetCanRespawn", "native_set_can_respawn")
 	register_native("CSDM_RespawnPlayer", "native_respawn_player")
 	register_native("CSDM_GetGamemode", "native_get_gamemode")
 	register_native("CSDM_SetGamemode", "native_set_gamemode")
@@ -69,8 +74,10 @@ public plugin_natives()
 
 public plugin_end()
 {
-	if(g_tSections)
-		TrieDestroy(g_tSections)
+	if(g_tConfigSections)
+		TrieDestroy(g_tConfigSections)
+	if(g_tConfigValues)
+		TrieDestroy(g_tConfigValues)
 }
 
 public plugin_init()
@@ -82,6 +89,7 @@ public plugin_init()
 	RegisterHookChain(RG_CBasePlayer_Killed, "CSGameRules_PlayerKilled", .post = false)
 	RegisterHookChain(RG_CBasePlayer_Spawn, "CBasePlayer_Spawn", .post = true)
 	RegisterHookChain(RG_HandleMenu_ChooseAppearance, "HandleMenu_ChooseAppearance", .post = true)
+	RegisterHookChain(RG_CBasePlayer_RoundRespawn, "CBasePlayer_RoundRespawn", .post = false)
 	RegisterHookChain(RG_RoundEnd, "RoundEnd", .post = false)
 	DisableHookChain(g_hTraceAttack = RegisterHookChain(RG_CBasePlayer_TraceAttack, "CBasePlayer_TraceAttack", .post = false))
 	DisableHookChain(g_hFPlayerCanRespawn = RegisterHookChain(RG_CSGameRules_FPlayerCanRespawn, "CSGameRules_FPlayerCanRespawn", .post = false))
@@ -105,11 +113,8 @@ public GameTypes:native_get_gamemode(iPlugin, iParams)
 
 public bool:native_set_gamemode(iPlugin, iParams)
 {
-	if(iParams != 1)
-	{
-		log_error(AMX_ERR_GENERAL, "[CSDM] ERROR: Bad arg count!")
+	if(!CheckNativeParams(iParams, 1, 1))
 		return false
-	}
 
 	new GameTypes:iNewGamemode = GameTypes:clamp(get_param(1), _:NORMAL_HIT, _:AUTO_HEALER)
 	if(g_iGamemode == iNewGamemode)
@@ -134,15 +139,36 @@ public bool:native_set_gamemode(iPlugin, iParams)
 	return true
 }
 
-public native_register_config(iPlugin, iParams)
+public bool:native_get_config_keyvalue(iPlugin, iParams)
 {
-	if(!(1 <= iParams <= 2)) // max params
+	if(!CheckNativeParams(iParams, 1, 3))
+		return false
+
+	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN]
+	get_string(1, szKey, charsmax(szKey))
+	if(!szKey[0])
 	{
-		log_error(AMX_ERR_GENERAL, "[CSDM] ERROR: Bad arg count!")
-		return INVALID_INDEX
+		log_error(AMX_ERR_NATIVE, "[CSDM] ERROR: Invalid key name!")
+		return false
 	}
 
-	new eArrayData[config_s], szHandler[64], szSection[32]
+	strtolower(szKey)
+	if(!TrieGetString(g_tConfigValues, szKey, szValue, charsmax(szValue)))
+	{
+		server_print("[CSDM] ERROR: Key name ^"%s^" was not found!", szKey)
+		return false
+	}
+
+	set_string(2, szValue, get_param(3)/* iLen */)
+	return true
+}
+
+public native_register_config(iPlugin, iParams)
+{
+	if(!CheckNativeParams(iParams, 1, 2))
+		return INVALID_INDEX
+
+	new eArrayData[config_s], szHandler[64], szSection[MAX_SECTION_LEN]
 
 	get_string(1, szSection, charsmax(szSection))
 	if(!szSection[0])
@@ -150,6 +176,9 @@ public native_register_config(iPlugin, iParams)
 		log_error(AMX_ERR_NATIVE, "[CSDM] ERROR: Invalid section name!")
 		return INVALID_INDEX
 	}
+
+	strtolower(szSection)
+	format(szSection, charsmax(szSection), "[%s]", szSection)
 
 	get_string(2, szHandler, charsmax(szHandler))
 	if(!szHandler[0])
@@ -168,20 +197,42 @@ public native_register_config(iPlugin, iParams)
 
 	new iItemIndex = eArrayData[iSectionID] = g_iTotalItems++
 	ArrayPushArray(g_aConfigData, eArrayData)
-
-	format(szSection, charsmax(szSection), "[%s]", szSection)
-	TrieSetCell(g_tSections, szSection, iItemIndex)
+	TrieSetCell(g_tConfigSections, szSection, iItemIndex)
 
 	return iItemIndex
 }
 
+public bool:native_get_can_respawn(iPlugin, iParams)
+{
+	if(!CheckNativeParams(iParams, 1, 1))
+		return false
+
+	new pPlayer = get_param(1)
+	return IsPlayer(pPlayer) ? g_bFPlayerCanRespawn[pPlayer] : g_bAllowRespawn
+}
+
+public native_set_can_respawn(iPlugin, iParams)
+{
+	if(!CheckNativeParams(iParams, 1, 2))
+		return
+
+	new pPlayer = get_param(1)
+	new bool:bCanRespawn = bool:get_param(2)
+	if(IsPlayer(pPlayer))
+	{
+		g_bFPlayerCanRespawn[pPlayer] = bCanRespawn
+	}
+	else
+	{
+		ArraySet(g_bFPlayerCanRespawn, bCanRespawn)
+		g_bAllowRespawn = bCanRespawn
+	}
+}
+
 public bool:native_respawn_player(iPlugin, iParams)
 {
-	if(!(1 <= iParams <= 2)) // max params
-	{
-		log_error(AMX_ERR_GENERAL, "[CSDM] ERROR: Bad arg count!")
+	if(!CheckNativeParams(iParams, 1, 2))
 		return false
-	}
 
 	new pPlayer = get_param(1)
 	if(!IsPlayer(pPlayer))
@@ -200,7 +251,14 @@ public client_putinserver(pPlayer)
 	remove_task(PlayerTask(pPlayer))
 	g_bIsBot[pPlayer] = bool:is_user_bot(pPlayer)
 	g_iNumSpawns[pPlayer] = 0
+
 	g_bFirstSpawn[pPlayer] = true
+	g_bFPlayerCanRespawn[pPlayer] = g_bAllowRespawn
+}
+
+public CBasePlayer_RoundRespawn(const pPlayer)
+{
+	return g_bFPlayerCanRespawn[pPlayer] ? HC_CONTINUE : HC_SUPERCEDE
 }
 
 public CBasePlayer_Spawn(const pPlayer)
@@ -222,7 +280,7 @@ public CSGameRules_PlayerKilled(const pPlayer, const pKiller, const iGibs)
 		rg_remove_item(pPlayer, "item_thighpack")
 	}
 
-	if(iRet != PLUGIN_HANDLED)
+	if(iRet != PLUGIN_HANDLED || g_bFPlayerCanRespawn[pPlayer])
 	{
 		TaskRespawnStart(pPlayer, g_flRespawnDelay)
 	}
@@ -264,7 +322,7 @@ public HandleMenu_ChooseAppearance(const pPlayer, const slot)
 		EnableHookChain(g_hFPlayerCanRespawn)
 		g_bFirstSpawn[pPlayer] = false
 	}
-	else
+	else if(!g_bFPlayerCanRespawn[pPlayer])
 	{
 		TaskRespawnStart(pPlayer, 0.5)
 	}
@@ -274,7 +332,7 @@ public CSGameRules_FPlayerCanRespawn(const pPlayer)
 {
 	DisableHookChain(g_hFPlayerCanRespawn)
 
-	SetHookChainReturn(ATYPE_INTEGER, true)
+	SetHookChainReturn(ATYPE_INTEGER, g_bFPlayerCanRespawn[pPlayer])
 	return HC_SUPERCEDE
 }
 
@@ -362,8 +420,8 @@ public SetCVarValues()
 
 LoadSettings(const ReadTypes:iReadAction = CFG_READ)
 {
-	new szLineData[64], eArrayData[config_s], pFile, iItemIndex = INVALID_INDEX, bool:bMainSettings
-	new szKey[32], szValue[10], szSign[2]
+	new szLineData[MAX_LINE_LEN], eArrayData[config_s], pFile, iItemIndex = INVALID_INDEX, bool:bMainSettings
+	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN], szSign[2]
 
 	if(!(pFile = OpenConfigFile()))
 		return
@@ -375,19 +433,18 @@ LoadSettings(const ReadTypes:iReadAction = CFG_READ)
 	{
 		fgets(pFile, szLineData, charsmax(szLineData))
 		trim(szLineData)
-		
-		if(!szLineData[0] || szLineData[0] == ';' || szLineData[0] == '#')
+
+		if(IsEmptyLine(szLineData) || IsCommentLine(szLineData))
 			continue
 
 		if(szLineData[0] == '[')
 		{
-			bMainSettings = bool:(equal(szLineData, "[settings]"))
-
-			if(g_iTotalItems && !TrieGetCell(g_tSections, szLineData, iItemIndex))
+			bMainSettings = bool:(equali(szLineData, g_szMainSection))
+			strtolower(szLineData)
+			if(g_iTotalItems && !TrieGetCell(g_tConfigSections, szLineData, iItemIndex))
 			{
 				iItemIndex = INVALID_INDEX
 			}
-
 			continue
 		}
 
@@ -397,28 +454,31 @@ LoadSettings(const ReadTypes:iReadAction = CFG_READ)
 			PluginCallFunc(eArrayData, szLineData)
 		}
 
+		if(!ParseConfigKey(szLineData, szKey, szSign, szValue))
+			continue
+
+		strtolower(szKey)
+		TrieSetString(g_tConfigValues, szKey, szValue)
+
 		if(bMainSettings)
 		{
-			if(!ParseConfigKey(szLineData, szKey, szSign, szValue))
-				continue
-
-			if(equal(szKey, "respawn_delay"))
+			if(equali(szKey, "respawn_delay"))
 			{
 				g_flRespawnDelay = floatclamp(str_to_float(szValue), MIN_RESPAWN_TIME, MAX_RESPAWN_TIME)
 			}
-			else if(equal(szKey, "show_respawn_bar"))
+			else if(equali(szKey, "show_respawn_bar"))
 			{
 				g_bShowRespawnBar = bool:(str_to_num(szValue))
 			}
-			else if(equal(szKey, "block_gunpickup_sound"))
+			else if(equali(szKey, "block_gunpickup_sound"))
 			{
 				g_bBlockGunpickupSound = bool:(str_to_num(szValue))
 			}
-			else if(equal(szKey, "free_for_all"))
+			else if(equali(szKey, "free_for_all"))
 			{
 				g_bFreeForAll = bool:(str_to_num(szValue))
 			}
-			else if(equal(szKey, "gameplay_mode"))
+			else if(equali(szKey, "gameplay_mode"))
 			{
 				g_iGamemode = GameTypes:clamp(str_to_num(szValue), _:NORMAL_HIT, _:AUTO_HEALER)
 			}
@@ -440,6 +500,9 @@ OpenConfigFile()
 		copy(szMapPrefix, charsmax(szMapPrefix), "$")
 	else
 		copyc(szMapPrefix, charsmax(szMapPrefix), szMapName, '_')
+
+	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/%s", szConfigDir, g_szMainDir, g_szExtraCfgDir)
+	MakeDir(szConfigFile)
 
 	formatex(szConfigFile, charsmax(szConfigFile), "%s/%s/%s/%s.ini", szConfigDir, g_szMainDir, g_szExtraCfgDir, szMapName)
 	if((pFile = fopen(szConfigFile, "rt"))) // extra config
@@ -500,5 +563,15 @@ CheckForwards()
 		unregister_forward(FM_EmitSound, g_iFwdEmitSound, .post = false)
 		g_iFwdEmitSound = 0
 	}
+}
+
+bool:CheckNativeParams(const iParams, const iMin, const iMax)
+{
+	if(iMin == iMax ? iParams != iMax : !(iMin <= iParams <= iMax)) // max params
+	{
+		log_error(AMX_ERR_PARAMS, "[CSDM] ERROR: Bad arg count!")
+		return false
+	}
+	return true
 }
 

@@ -1,8 +1,8 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <fakemeta>
 #include <csdm>
+#include <fakemeta>
 
 
 #define REMOVE_ENTITY(%1) 			engfunc(EngFunc_RemoveEntity, %1)
@@ -264,7 +264,7 @@ public EquipMenuHandler(const pPlayer, const iMenu, const iItem)
 			PreviousWeapons(pPlayer, g_aArrays[Secondary], g_iPreviousSecondary[pPlayer])
 			PreviousWeapons(pPlayer, g_aArrays[Primary], g_iPreviousPrimary[pPlayer])
 		}
-		case 3: 
+		case 3:
 		{
 			PreviousWeapons(pPlayer, g_aArrays[Secondary], g_iPreviousSecondary[pPlayer])
 			PreviousWeapons(pPlayer, g_aArrays[Primary], g_iPreviousPrimary[pPlayer])
@@ -336,23 +336,23 @@ public PrimaryMenuHandler(const pPlayer, const iMenu, const iItem)
 }
 
 // Config callbacks
-public ReadCfg_Settings(szLineData[], const iSectionID)
+public ReadCfg_Settings(const szLineData[], const iSectionID)
 {
-	new szKey[32], szValue[16], szSign[2]
+	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN], szSign[2]
 	if(ParseConfigKey(szLineData, szKey, szSign, szValue))
 	{
-		if(equal(szKey, "equip_mode"))
+		if(equali(szKey, "equip_mode"))
 		{
 			g_iEquipMode = EquipTypes:clamp(str_to_num(szValue), _:AUTO_EQUIP, _:FREE_BUY)
 		}
-		else if(equal(szKey, "block_default_items"))
+		else if(equali(szKey, "block_default_items"))
 		{
-			g_bBlockDefaultItems = bool:str_to_num(szValue)
+			g_bBlockDefaultItems = bool:(str_to_num(szValue))
 		}
 	}
 }
 
-public ReadCfg_AutoItems(szLineData[], const iSectionID)
+public ReadCfg_AutoItems(const szLineData[], const iSectionID)
 {
 	new szClassName[20], szTeam[4], szAmount[4], eWeaponData[equip_data_s]
 	if(parse(szLineData, szClassName, charsmax(szClassName), szTeam, charsmax(szTeam), szAmount, charsmax(szAmount)) != 3)
@@ -392,9 +392,9 @@ public ReadCfg_BotWeapons(szLineData[], const iSectionID)
 	}
 }
 
-public ReadCfg_MenuItems(szLineData[], const iSectionID)
+public ReadCfg_MenuItems(const szLineData[], const iSectionID)
 {
-	new szClassName[20], szMenuText[32], eWeaponData[equip_data_s]
+	new szClassName[20], szMenuText[64], eWeaponData[equip_data_s]
 	if(parse(szLineData, szClassName, charsmax(szClassName), szMenuText, charsmax(szMenuText)) != 2)
 		return
 
@@ -486,10 +486,10 @@ BuildMenus()
 	g_iEquipMenuID = MenuCrate("Equip Menu", "EquipMenuHandler", bool:(!g_iNumSecondary && !g_iNumPrimary))
 	g_iEquipMenuCB = menu_makecallback("EquipMenuCallback")
 
-	menu_additem(g_iEquipMenuID, "New Weapons", "1", .callback = g_iEquipMenuCB)
-	menu_additem(g_iEquipMenuID, "Previous Setup", "2", .callback = g_iEquipMenuCB)
+	menu_additem(g_iEquipMenuID, "New weapons", "1", .callback = g_iEquipMenuCB)
+	menu_additem(g_iEquipMenuID, "Previous setup", "2", .callback = g_iEquipMenuCB)
 	menu_additem(g_iEquipMenuID, "2+Don't show menu again^n", "3", .callback = g_iEquipMenuCB)
-	menu_additem(g_iEquipMenuID, "Random Selection", "4", .callback = g_iEquipMenuCB)
+	menu_additem(g_iEquipMenuID, "Random selection", "4", .callback = g_iEquipMenuCB)
 
 	g_iSecondaryMenuID = MenuCrate("Secondary Weapons", "SecondaryMenuHandler")
 	AddItemsToMenu(g_iSecondaryMenuID, g_aArrays[Secondary], g_iNumSecondary)
