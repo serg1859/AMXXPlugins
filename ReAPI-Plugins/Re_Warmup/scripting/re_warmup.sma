@@ -90,7 +90,7 @@ new g_eWeapons[][WEAPON_DATA] = {
 
 /**■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ CONFIG END ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■*/
 
-#define VERSION "1.0.2"
+#define VERSION "1.0.21"
 
 #if !defined Ham_CS_Player_ResetMaxSpeed
 	#define Ham_CS_Player_ResetMaxSpeed Ham_Item_PreFrame
@@ -590,7 +590,8 @@ public CBasePlayer_Killed(id, pevAttacker, iGib)
 
 public CBasePlayer_Spawn(id)
 {
-	set_member_game(m_fRoundCount, get_gametime()) // hack buytime :D
+		/* Time round has started (deprecated name m_fRoundCount) */
+	set_member_game(m_fRoundStartTime, get_gametime()) // hack buytime :D
 
 	if(!is_user_alive(id))
 		return
