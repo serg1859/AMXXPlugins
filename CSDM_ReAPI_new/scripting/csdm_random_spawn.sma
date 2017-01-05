@@ -19,9 +19,6 @@ new Float:g_flSpotAngles[MAX_SPAWNS][coord_e]
 new g_iLastSpawnIndex[MAX_CLIENTS + 1]
 new g_iTotalPoints
 
-new g_szDirectory[] = "csdm"
-
-
 public plugin_init()
 {
 	register_plugin("CSDM Random Spawn", CSDM_VERSION_STRING, "Vaqtincha")
@@ -42,7 +39,7 @@ LoadPoints()
 	get_localinfo("amxx_configsdir", szSpawnFile, charsmax(szSpawnFile))
 	get_mapname(szMapName, charsmax(szMapName))
 
-	format(szSpawnFile, charsmax(szSpawnFile), "%s/%s/spawns/%s.spawns.cfg", szSpawnFile, g_szDirectory, szMapName)
+	format(szSpawnFile, charsmax(szSpawnFile), "%s/%s/spawns/%s.spawns.cfg", szSpawnFile, g_szMainDir, szMapName)
 
 	new pFile = fopen(szSpawnFile, "rt")
 	if(!pFile)

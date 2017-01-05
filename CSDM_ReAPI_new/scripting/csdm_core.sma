@@ -389,7 +389,7 @@ TaskRespawnStart(const pPlayer, const Float:flDelay = 0.0)
 		}
 		if(g_bShowRespawnBar && flDelay >= 1.5 && !(Menu_ChooseTeam <= get_member(pPlayer, m_iMenu) <= Menu_ChooseAppearance))
 		{
-			rg_send_bartime(pPlayer, floatround(flDelay), false)
+			rg_send_bartime(pPlayer, flDelay, false)
 		}
 	}
 }
