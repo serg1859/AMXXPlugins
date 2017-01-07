@@ -54,5 +54,6 @@ public Message_TextMsg(iMsgId, iMsgDest, id)
         //return equal(szMsg, "#Game_teammate_attack");
         return (szMsg[3] == 'm' && szMsg[6] == 't' && szMsg[15] == 'a');
     }
+    return PLUGIN_CONTINUE;
 }
 #endif
