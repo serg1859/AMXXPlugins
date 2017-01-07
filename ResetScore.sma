@@ -4,7 +4,7 @@
 
 public plugin_init()
 {
-	register_plugin("Reset Score", "0.0.1", "wopox1337");
+	register_plugin("Reset Score", "0.0.2", "wopox1337");
 
 	// Тут впишите желаемые команды для выполнения сброса у игрока.
 	new szCmds[][] =
@@ -29,5 +29,7 @@ public Do_ResetScore(iPlayerId)
 		cs_set_user_deaths(iPlayerId, .newdeaths = 0);
 
 		client_print(iPlayerId, print_center, "Вы сбросили свой счёт!");
+
+		return PLUGIN_HANDLED;
 	}
 }
