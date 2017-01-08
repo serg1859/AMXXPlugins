@@ -78,7 +78,7 @@ public WarmupCountdown(iCurrent, iCountdown)
 
 public plugin_init()
 {
-	register_plugin("Warmup Misc", "0.0.3", "Vaqtincha")
+	register_plugin("Warmup Misc", "0.0.4", "Vaqtincha")
 #if defined FAST_SWITCH_DELAY	
 	DisableHamForward(g_hDeploy[0] = RegisterHam(Ham_Item_Deploy, "weapon_awp", "ItemDeploy_Post", .Post = true))
 	DisableHamForward(g_hDeploy[1] = RegisterHam(Ham_Item_Deploy, "weapon_scout", "ItemDeploy_Post", .Post = true))
@@ -249,7 +249,7 @@ stock GetPlayersCount()
 	new i, iCount
 	for(i = 0; i <= get_playersnum(); i++)
 	{
-		if(!IsValidTeam(i))
+		if(!is_user_connected(i) || !IsValidTeam(i))
 			continue
 
 		iCount++
@@ -257,5 +257,3 @@ stock GetPlayersCount()
 	
 	return iCount
 }
-
-
