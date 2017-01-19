@@ -1,27 +1,19 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <fakemeta>
 #include <csdm>
+#include <fakemeta>
 #include <xs>
 
 
-#define REMOVE_ENTITY(%1) 			engfunc(EngFunc_RemoveEntity, %1)
-#define SET_ORIGIN(%1,%2) 			engfunc(EngFunc_SetOrigin, %1, %2)
-#define SET_MODEL(%1,%2)			engfunc(EngFunc_SetModel, %1, %2)
 #define IsVectorZero(%1) 			(%1[X] == 0.0 && %1[Y] == 0.0 && %1[Z] == 0.0)
 
-
 const MAX_SPAWNS = 64
-const EDIT_MODE_SPEED = 300
-const Float:EDIT_MODE_GRAVITY = 0.3
+
 const Float:ADD_Z_POSITION = 15.0
 
-
-const SEQUENCE_ACT_IDLE = 1
-const SEQUENCE_ACT_RUN = 4
-
-const MENU_KEY_BITS = (MENU_KEY_1|MENU_KEY_2|MENU_KEY_3|MENU_KEY_4|MENU_KEY_5|MENU_KEY_8)
+const MENU_KEY_BITS = (MENU_KEY_1|MENU_KEY_2|MENU_KEY_3|MENU_KEY_4|MENU_KEY_5|MENU_KEY_6|MENU_KEY_8)
+const MENU_KEY_BITS_2 = (MENU_KEY_0|MENU_KEY_1|MENU_KEY_2|MENU_KEY_3)
 
 enum coord_e { Float:X, Float:Y, Float:Z }
 
@@ -32,9 +24,14 @@ enum
 	FILE_DELETED
 }
 
+new const Float:g_flGravity[] = {1.0, 0.5, 0.25}
+new const Float:g_flSpeed[] = {250.0, 350.0, 450.0}
+new const Float:g_flDistance[] = {500.0, 1000.0, 2000.0}
+
 new const g_szModel[] = "models/player/vip/vip.mdl"
 new const g_szClassName[] = "view_spawn"
-new const g_szMenuTitle[] = "SpawnEditor"
+new const g_szEditorMenuTitle[] = "SpawnEditor"
+new const g_szSettingsMenuTitle[] = "SettingsMenu"
 
 new HookChain:g_hGetPlayerSpawnSpot, HookChain:g_hResetMaxSpeed
 
@@ -44,7 +41,8 @@ new Float:g_flSpotAngles[MAX_SPAWNS][coord_e]
 
 new g_pAimedEntity[MAX_CLIENTS + 1], g_iLastSpawnIndex[MAX_CLIENTS + 1], bool:g_bFirstSpawn[MAX_CLIENTS + 1]
 new g_szSpawnDirectory[MAX_CONFIG_PATH_LEN], g_szSpawnFile[MAX_CONFIG_PATH_LEN + 32], g_szMapName[32], g_szAuthorName[32]
-new g_iTotalPoints, g_iEditorMenuID, bool:g_bEditSpawns, bool:g_bNotSaved
+new g_iTotalPoints, g_iEditorMenuID, g_iSettingsMenuID, bool:g_bEditSpawns, bool:g_bNotSaved
+new g_iGravity, g_iSpeed, g_iDistance = 1
 
 
 public plugin_init()
@@ -52,7 +50,8 @@ public plugin_init()
 	register_plugin("CSDM Spawn Manager", CSDM_VERSION_STRING, "Vaqtincha")
 	register_concmd("csdm_edit_spawns", "ConCmd_EditSpawns", ADMIN_MAP, "Edits spawn configuration")
 	register_clcmd("nightvision", "ClCmd_Nightvision") 
-	register_menucmd((g_iEditorMenuID = register_menuid(g_szMenuTitle)), MENU_KEY_BITS, "MenuHandler")
+	register_menucmd((g_iEditorMenuID = register_menuid(g_szEditorMenuTitle)), MENU_KEY_BITS, "EditorMenuHandler")
+	register_menucmd((g_iSettingsMenuID = register_menuid(g_szSettingsMenuTitle)), MENU_KEY_BITS_2, "SettingsMenuHandler")
 
 	DisableHookChain(g_hGetPlayerSpawnSpot = RegisterHookChain(RG_CSGameRules_GetPlayerSpawnSpot, "CSGameRules_GetPlayerSpawnSpot", .post = true))
 	DisableHookChain(g_hResetMaxSpeed = RegisterHookChain(RG_CBasePlayer_ResetMaxSpeed, "CBasePlayer_ResetMaxSpeed", .post = false))
@@ -115,7 +114,7 @@ public ClCmd_Nightvision(const pPlayer, const level)
 	if(!g_bEditSpawns || !is_user_alive(pPlayer) || ~get_user_flags(pPlayer) & level)
 		return PLUGIN_CONTINUE
 
-	return ShowMenu(pPlayer)
+	return ShowEditorMenu(pPlayer)
 }
 
 public ConCmd_EditSpawns(const pPlayer, const level)
@@ -128,17 +127,17 @@ public ConCmd_EditSpawns(const pPlayer, const level)
 		if(g_bNotSaved && SavePoints() == FAILED_CREATE)
 		{
 			console_print(pPlayer, "[CSDM] Autosave is failed. Please try again")
-			return ShowMenu(pPlayer)
+			return ShowEditorMenu(pPlayer)
 		}
 
 		console_print(pPlayer, "[CSDM] Spawn editor disabled")
 		CloseOpenedMenu(pPlayer)
 		RemoveAllSpotEntitys()
 		g_bEditSpawns = false
-		set_entvar(pPlayer, var_maxspeed, 250.0)
-		// rg_reset_maxspeed(pPlayer)
+
 		set_entvar(pPlayer, var_gravity, 1.0)
 		DisableHookChain(g_hResetMaxSpeed)
+		rg_reset_maxspeed(pPlayer)
 
 		return PLUGIN_HANDLED
 	}
@@ -147,17 +146,17 @@ public ConCmd_EditSpawns(const pPlayer, const level)
 	get_user_name(pPlayer, g_szAuthorName, charsmax(g_szAuthorName))
 	MakeAllSpotEntitys()
 	g_bEditSpawns = true
-	set_entvar(pPlayer, var_maxspeed, float(EDIT_MODE_SPEED))
-	// rg_reset_maxspeed(pPlayer)
-	set_entvar(pPlayer, var_gravity, EDIT_MODE_GRAVITY)
-	EnableHookChain(g_hResetMaxSpeed)
 
-	return ShowMenu(pPlayer)
+	set_entvar(pPlayer, var_gravity, g_flGravity[g_iGravity])
+	EnableHookChain(g_hResetMaxSpeed)
+	rg_reset_maxspeed(pPlayer)
+
+	return ShowEditorMenu(pPlayer)
 }
 
 public CBasePlayer_ResetMaxSpeed(const pPlayer)
 {
-	set_entvar(pPlayer, var_maxspeed, float(EDIT_MODE_SPEED))
+	set_entvar(pPlayer, var_maxspeed, g_flSpeed[g_iSpeed])
 	return HC_SUPERCEDE
 }
 
@@ -189,12 +188,12 @@ RandomSpawn(const pPlayer)
 	}
 }
 
-public ShowMenu(const pPlayer)
+public ShowEditorMenu(const pPlayer)
 {
 	new szMenu[512], Float:flOrigin[coord_e], iKeys, iLen
 	get_entvar(pPlayer, var_origin, flOrigin)
 	iLen = formatex(szMenu, charsmax(szMenu), "\ySpawn Editor^n^n")
-	iKeys |= g_bNotSaved ? (MENU_KEY_2|MENU_KEY_5|MENU_KEY_8) : (MENU_KEY_2|MENU_KEY_5)
+	iKeys |= g_bNotSaved ? (MENU_KEY_2|MENU_KEY_5|MENU_KEY_6|MENU_KEY_8) : (MENU_KEY_2|MENU_KEY_5|MENU_KEY_6)
 
 	if(g_pAimedEntity[pPlayer] == NULLENT)
 	{
@@ -220,20 +219,36 @@ public ShowMenu(const pPlayer)
 
 	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, 
 		"\y5. \wReflesh info^n\
+		\y6. \wSettings^n^n\
 		%s^n",
 		g_bNotSaved ? "\y8. \wSave manual" : "\d8. Save manual"
 	)
 
 	formatex(szMenu[iLen], charsmax(szMenu) - iLen, 
-		"^n^n\wTotal spawns: \y%d^n\wCurrent position: \rX \y%0.f \rY \y%0.f \rZ \y%0.f",
+		"^n\wTotal spawns: \y%d^n\wCurrent position: \rX \y%0.f \rY \y%0.f \rZ \y%0.f",
 		g_iTotalPoints, flOrigin[X], flOrigin[Y], flOrigin[Z]
 	)
 
-	show_menu(pPlayer, iKeys, szMenu, .title = g_szMenuTitle)
+	show_menu(pPlayer, iKeys, szMenu, .title = g_szEditorMenuTitle)
 	return PLUGIN_HANDLED
 }
 
-public MenuHandler(const pPlayer, iKey)
+public ShowSettingsMenu(const pPlayer)
+{
+	new szMenu[512], iLen = formatex(szMenu, charsmax(szMenu), "\ySettings^n^n")
+	formatex(szMenu[iLen], charsmax(szMenu) - iLen,
+		"\y1. \wSpeed: \y%0.f^n\
+		\y2. \wGravity: \y%0.2f^n\
+		\y3. \wDistance: \y%0.f^n\
+		^n^n\y0. \wBack^n",
+		g_flSpeed[g_iSpeed], g_flGravity[g_iGravity], g_flDistance[g_iDistance]
+	)
+
+	show_menu(pPlayer, MENU_KEY_BITS_2, szMenu, .title = g_szSettingsMenuTitle)
+	return PLUGIN_HANDLED
+}
+
+public EditorMenuHandler(const pPlayer, iKey)
 {
 	if(!g_bEditSpawns)
 		return PLUGIN_HANDLED
@@ -266,6 +281,7 @@ public MenuHandler(const pPlayer, iKey)
 				"Total spawns: ^4%d ^1Current position: ^3X ^4%0.f ^3Y ^4%0.f ^3Z ^4%0.f", 
 					g_iTotalPoints, flOrigin[X], flOrigin[Y], flOrigin[Z])
 		}
+		case 6: return ShowSettingsMenu(pPlayer)
 		case 8:
 		{
 			static const szResultPrint[][] = {"Failed to create file!^rPlease try again", "Saved successfully", "File deleted"}
@@ -273,7 +289,40 @@ public MenuHandler(const pPlayer, iKey)
 		}
 	}
 
-	return ShowMenu(pPlayer)
+	return ShowEditorMenu(pPlayer)
+}
+
+public SettingsMenuHandler(const pPlayer, iKey)
+{
+	if(!g_bEditSpawns)
+		return PLUGIN_HANDLED
+
+	iKey++
+	switch(iKey)
+	{
+		case 1: 
+		{
+			if(g_iSpeed++ >= sizeof(g_flSpeed)-1)
+				g_iSpeed = 0
+
+			rg_reset_maxspeed(pPlayer)
+		}
+		case 2:
+		{
+			if(g_iGravity++ >= sizeof(g_flGravity)-1)
+				g_iGravity = 0
+
+			set_entvar(pPlayer, var_gravity, g_flGravity[g_iGravity])
+		}
+		case 3:
+		{
+			if(g_iDistance++ >= sizeof(g_flDistance)-1)
+				g_iDistance = 0
+		}
+		case 10: return ShowEditorMenu(pPlayer)
+	}
+
+	return ShowSettingsMenu(pPlayer)
 }
 
 bool:AddSpawn(const pPlayer)
@@ -341,17 +390,17 @@ LoadPoints()
 	new pFile
 	if(!(pFile = fopen(g_szSpawnFile, "rt")))
 	{
-		server_print("[CSDM] No spawn points file found %s", g_szMapName)
+		server_print("[CSDM] No spawn points file found ^"%s^"", g_szMapName)
 		return
 	}
 
-	new szDatas[64], szOrigin[coord_e][6], szTeam[3], szAngles[coord_e][6], szVAngles[coord_e][6]
+	new szDatas[MAX_LINE_LEN], szOrigin[coord_e][6], szTeam[3], szAngles[coord_e][6], szVAngles[coord_e][6]
 	while(!feof(pFile))
 	{
 		fgets(pFile, szDatas, charsmax(szDatas))
 		trim(szDatas)
 
-		if(IsEmptyLine(szDatas) || IsCommentLine(szDatas))
+		if(!szDatas[0] || IsCommentLine(szDatas))
 			continue
 
 		if(parse(szDatas, 
@@ -386,7 +435,7 @@ LoadPoints()
 	}
 	if(g_iTotalPoints)
 	{
-		server_print("[CSDM] Loaded %d spawn points for map %s", g_iTotalPoints, g_szMapName)
+		server_print("[CSDM] Loaded %d spawn points for map ^"%s^"", g_iTotalPoints, g_szMapName)
 		EnableHookChain(g_hGetPlayerSpawnSpot)
 	}
 
@@ -477,7 +526,8 @@ CreateEntity()
 	set_entvar(pEntity, var_classname, g_szClassName)
 	SET_MODEL(pEntity, g_szModel)
 	set_entvar(pEntity, var_solid, SOLID_NOT)
-	set_entvar(pEntity, var_sequence, SEQUENCE_ACT_IDLE)
+	rg_animate_entity(pEntity, ACT_IDLE)
+
 	return pEntity
 }
 
@@ -510,11 +560,11 @@ GetPosition(const pEntity, Float:flOrigin[coord_e], Float:flAngles[coord_e], Flo
 
 bool:SetAimedEntity(const pPlayer)
 {
-	new pEntity = FindEntityByAim(pPlayer, g_szClassName, 1000.0)
+	new pEntity = FindEntityByAim(pPlayer, g_szClassName, g_flDistance[g_iDistance])
 	if(pEntity == NULLENT)
 		return false
 
-	rg_animate_entity(pEntity, SEQUENCE_ACT_RUN, 1.0)
+	rg_animate_entity(pEntity, ACT_RUN, 1.0)
 	rg_set_rendering(pEntity, kRenderFxGlowShell, Vector(0, 250, 0), 20.0)
 
 	g_pAimedEntity[pPlayer] = pEntity
@@ -524,7 +574,7 @@ bool:SetAimedEntity(const pPlayer)
 
 ClearAimedEntity(const pPlayer)
 {
-	rg_animate_entity(g_pAimedEntity[pPlayer], SEQUENCE_ACT_IDLE)
+	rg_animate_entity(g_pAimedEntity[pPlayer], ACT_IDLE)
 	rg_set_rendering(g_pAimedEntity[pPlayer])
 	g_pAimedEntity[pPlayer] = NULLENT
 }
@@ -544,24 +594,17 @@ CloseOpenedMenu(const pPlayer)
 {
 	new iMenuID, iKeys
 	get_user_menu(pPlayer, iMenuID, iKeys)
-	if(iMenuID == g_iEditorMenuID)
+	if(iMenuID == g_iEditorMenuID || iMenuID == g_iSettingsMenuID)
 	{
 		menu_cancel(pPlayer)
 		show_menu(pPlayer, 0, "^n", 1)
 	}
 }
 
-stock rg_animate_entity(const pEntity, const iSequence, const Float:flFramerate = 0.0)
+stock rg_animate_entity(const pEntity, const Activity:iSequence, const Float:flFramerate = 0.0)
 {
 	set_entvar(pEntity, var_sequence, iSequence)
 	set_entvar(pEntity, var_framerate, flFramerate)
-}
-
-stock rg_set_rendering(const pEntity, const fx = kRenderFxNone, const Float:flColor[] = {0.0, 0.0, 0.0}, const Float:iAmount = 0.0)
-{
-	set_entvar(pEntity, var_renderfx, fx)
-	set_entvar(pEntity, var_rendercolor, flColor)
-	set_entvar(pEntity, var_renderamt, iAmount)
 }
 
 stock FindEntityByAim(const pPlayer, const szClassName[], const Float:iMaxDistance = 8191.0)

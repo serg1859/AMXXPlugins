@@ -112,8 +112,9 @@ public ReadCfg(const szLineData[], const iSectionID)
 	else if(equali(szKey, "sprite_name"))
 	{
 		copy(g_szSpriteName, charsmax(g_szSpriteName), szValue)
+		strtolower(g_szSpriteName)
 	}
-	else if(equali(szKey, "render_color_", 13) != -1)
+	else if(equali(szKey, "render_color_", 13))
 	{
 		new szRed[4], szGreen[4], szBlue[4]
 		new TeamName:iTeam = szKey[13] == 'c' ? TEAM_CT : TEAM_TERRORIST
@@ -178,12 +179,4 @@ stock SendStatusIcon(const pPlayer, iStatus = STATUSICON_HIDE, red = 0, green = 
 		message_end()
 	}
 }
-
-stock rg_set_rendering(const pEntity, const fx = kRenderFxNone, const Float:flColor[] = {0.0, 0.0, 0.0}, const Float:iAmount = 0.0)
-{
-	set_entvar(pEntity, var_renderfx, fx)
-	set_entvar(pEntity, var_rendercolor, flColor)
-	set_entvar(pEntity, var_renderamt, iAmount)
-}
-
 

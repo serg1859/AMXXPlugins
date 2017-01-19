@@ -5,19 +5,14 @@
 #include <fakemeta>
 
 
-#define REMOVE_ENTITY(%1) 			engfunc(EngFunc_RemoveEntity, %1)
-#define SPAWN_ENTITY(%1) 			dllfunc(DLLFunc_Spawn, %1)
-#define SET_ORIGIN(%1,%2) 			engfunc(EngFunc_SetOrigin, %1, %2)
-#define SET_SIZE(%1,%2,%3) 			engfunc(EngFunc_SetSize, %1, %2, %3)
 #define IsPlayerNotUsed(%1)			(g_iPreviousSecondary[%1] == INVALID_INDEX && g_iPreviousPrimary[%1] == INVALID_INDEX)
 
-const FREE_BUY_MODE_MONEY = 16000
 const CSDM_BUYZONE_KEY	= 71952486
 
 enum equip_data_s
 {
 	szWeaponName[20],
-	szDisplayName[64],
+	szDisplayName[32],
 	iAmount,
 	TeamName:iTeam,
 	WeaponIdType:iWeaponID
@@ -58,7 +53,7 @@ new g_iNumPrimary, g_iNumSecondary, g_iNumBotPrimary, g_iNumBotSecondary, g_iNum
 
 new g_iEquipMenuID, g_iEquipMenuCB, g_iSecondaryMenuID, g_iPrimaryMenuID
 new EquipTypes:g_iEquipMode = EQUIP_MENU, bool:g_bBlockDefaultItems = true
-new bool:g_bHasMapParameters
+new bool:g_bHasMapParameters, mp_maxmoney
 
 public plugin_init()
 {
@@ -73,6 +68,7 @@ public plugin_init()
 	DisableHookChain(g_hGiveNamedItem = RegisterHookChain(RG_CBasePlayer_GiveNamedItem, "CBasePlayer_GiveNamedItem", .post = true))
 
 	g_bHasMapParameters = bool:rg_find_ent_by_class(NULLENT, "info_map_parameters")
+	mp_maxmoney = get_cvar_pointer("mp_maxmoney")
 }
 
 public CSDM_Initialized(const szVersion[])
@@ -135,7 +131,7 @@ public CSDM_ExecuteCVarValues()
 {
 	if(g_iEquipMode == FREE_BUY)
 	{
-		set_cvar_num("mp_buytime", 999999) // set_cvar_num("mp_buytime", -1) // BUG ReGameDLL	
+		set_cvar_num("mp_buytime", -1)
 	}
 }
 
@@ -149,7 +145,6 @@ public CSDM_RestartRound(const bool:bNewGame)
 	for(--iCount; iCount >= 0; iCount--)
 	{
 		pPlayer = iPlayers[iCount]
-		// g_iPreviousSecondary[pPlayer] = g_iPreviousPrimary[pPlayer] = INVALID_INDEX // reset all
 		if(get_member(pPlayer, m_bNotKilled))
 		{
 			rg_remove_all_items(pPlayer)
@@ -168,7 +163,7 @@ public ClCmd_EnableMenu(const pPlayer)
 	if(g_iEquipMode != EQUIP_MENU)
 		return PLUGIN_HANDLED
 
-	if(is_user_alive(pPlayer) && IsPlayerNotUsed(pPlayer))
+	if(IsPlayerNotUsed(pPlayer) && is_user_alive(pPlayer))
 	{
 		menu_display(pPlayer, g_iEquipMenuID)
 		return PLUGIN_HANDLED
@@ -188,7 +183,7 @@ public CSDM_PlayerSpawned(const pPlayer, const bool:bIsBot, const iNumSpawns)
 {
 	if(g_iEquipMode == FREE_BUY)
 	{
-		rg_add_account(pPlayer, FREE_BUY_MODE_MONEY, AS_SET)
+		rg_add_account(pPlayer, get_pcvar_num(mp_maxmoney), AS_SET)
 		if(g_bBlockDefaultItems) // already gived by default ?
 		{
 			rg_give_item(pPlayer, "weapon_knife")
@@ -196,7 +191,7 @@ public CSDM_PlayerSpawned(const pPlayer, const bool:bIsBot, const iNumSpawns)
 		return
 	}
 
-	AutoItems(pPlayer)
+	GiveAutoItems(pPlayer)
 
 	if(g_iEquipMode == AUTO_EQUIP)  // only autoitems ?
 		return
@@ -314,7 +309,6 @@ public SecondaryMenuHandler(const pPlayer, const iMenu, const iItem)
 	g_iPreviousSecondary[pPlayer] = iItemIndex
 
 	menu_display(pPlayer, g_iPrimaryMenuID)
-
 	return PLUGIN_HANDLED
 }
 
@@ -373,8 +367,8 @@ public ReadCfg_AutoItems(const szLineData[], const iSectionID)
 public ReadCfg_BotWeapons(szLineData[], const iSectionID)
 {
 	new eWeaponData[equip_data_s]
-	strtolower(szLineData)
 
+	strtolower(szLineData)
 	if(!(eWeaponData[iWeaponID] = _:GetWeaponIndex(szLineData)))
 		return
 
@@ -394,7 +388,7 @@ public ReadCfg_BotWeapons(szLineData[], const iSectionID)
 
 public ReadCfg_MenuItems(const szLineData[], const iSectionID)
 {
-	new szClassName[20], szMenuText[64], eWeaponData[equip_data_s]
+	new szClassName[20], szMenuText[32], eWeaponData[equip_data_s]
 	if(parse(szLineData, szClassName, charsmax(szClassName), szMenuText, charsmax(szMenuText)) != 2)
 		return
 
@@ -439,7 +433,7 @@ RandomWeapons(const pPlayer, const Array:aArrayName, const iArraySize)
 	return iRand
 }
 
-AutoItems(const pPlayer)
+GiveAutoItems(const pPlayer)
 {
 	if(!g_iNumAutoItems)
 		return
@@ -591,29 +585,6 @@ bool:SetStateBuyZone(const iAction)
 		return true
 	}
 	return false
-}
-
-// FixFix rg_give_item
-stock rg_give_item_ex(const index, const pszName[], any:iId, GiveType:type = GT_APPEND)
-{
-	const PRIMARY_BS = 
-	(
-		1<<CSW_SCOUT|1<<CSW_XM1014|1<<CSW_MAC10|1<<CSW_AUG|1<<CSW_UMP45|1<<CSW_SG550|1<<CSW_GALIL|1<<CSW_FAMAS|1<<CSW_AWP|
-		1<<CSW_MP5NAVY|1<<CSW_M249|1<<CSW_M3|1<<CSW_M4A1|1<<CSW_TMP|1<<CSW_G3SG1|1<<CSW_SG552|1<<CSW_AK47|1<<CSW_P90
-	)
-	if(type != GT_APPEND)
-	{
-		// new iId = get_weaponid(pszName)
-		if(((PRIMARY_BS & 1<<iId) || iId == CSW_ELITE) && get_member(index, m_bOwnsShield))
-		{
-			rg_remove_item(index, "weapon_shield")
-		}
-		else if(equal(pszName, "weapon_shield") && user_has_weapon(index, CSW_ELITE))
-		{
-			rg_remove_item(index, "weapon_elite")
-		}
-	}
-	rg_give_item(index, pszName, type)
 }
 
 

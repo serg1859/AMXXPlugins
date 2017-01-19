@@ -25,8 +25,8 @@
 	#include <reapi>
 #endif
 
-const CSDM_VERSION_NUM = 003
-stock const CSDM_VERSION_STRING[] = "0.0.3b"
+const CSDM_VERSION_NUM = 005
+stock const CSDM_VERSION_STRING[] = "0.0.5b"
 stock const CSDM_PLUGIN_NAME[] = "CSDM Core"
 
 stock const g_szMainDir[] = "csdm"
@@ -166,7 +166,7 @@ native bool:CSDM_GetCanRespawn(const pPlayer = 0)
 /** Is this player allowed to respawn now? (true by default)
 *
 * @param pPlayer			0 = all
-* @param CanRespawn			true/false
+* @param bCanRespawn		true/false
 *
 * @noreturn
 */
@@ -198,10 +198,10 @@ native bool:CSDM_SetGamemode(const GameTypes:iNewMode)
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ HELPER STUFF ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
+// cfg
 #define ContainFlag(%1,%2) 			(containi(%1, %2) != -1)
 #define ParseConfigKey(%1,%2,%3,%4) (parse(%1, %2, charsmax(%2), %3, charsmax(%3), %4, charsmax(%4)) == 3 && %3[0] == '=')
 #define IsCommentLine(%1) 			(%1[0] == ';' || %1[0] == '#' || (%1[0] == '/' && %1[1] == '/'))
-#define IsEmptyLine(%1) 			(%1[0] == EOS || !%1[0])
 
 #define IsPlayerDead(%1)			(is_user_connected(%1) && get_entvar(%1, var_deadflag) != DEAD_NO)
 #define IsValidTeam(%1) 			(TEAM_TERRORIST <= get_member(%1, m_iTeam) <= TEAM_CT)
@@ -211,8 +211,19 @@ native bool:CSDM_SetGamemode(const GameTypes:iNewMode)
 #define CSDM_LOADED()				(is_plugin_loaded(CSDM_PLUGIN_NAME) != INVALID_PLUGIN_ID)
 #define Vector(%1,%2,%3)			(Float:{%1.0, %2.0, %3.0})
 #define VECTOR_ZERO 				Float:{0.0, 0.0, 0.0}
+
 #define GetEntityKeyID(%1)			get_entvar(%1, var_impulse)
 #define SetEntityKeyID(%1,%2)		set_entvar(%1, var_impulse, %2)
+
+// fakemeta
+#if !defined _fakemeta_included
+	#define ENTITY_THINK(%1) 		dllfunc(DLLFunc_Think, %1)
+	#define SPAWN_ENTITY(%1) 		dllfunc(DLLFunc_Spawn, %1)
+	#define REMOVE_ENTITY(%1) 		engfunc(EngFunc_RemoveEntity, %1)
+	#define SET_ORIGIN(%1,%2) 		engfunc(EngFunc_SetOrigin, %1, %2)
+	#define SET_SIZE(%1,%2,%3) 		engfunc(EngFunc_SetSize, %1, %2, %3)
+	#define SET_MODEL(%1,%2)		engfunc(EngFunc_SetModel, %1, %2)
+#endif
 
 const GRENADE_BS = ((1<<_:WEAPON_HEGRENADE)|(1<<_:WEAPON_SMOKEGRENADE)|(1<<_:WEAPON_FLASHBANG))
 const INVALID_WEAPONS_BS = ((1<<_:WEAPON_NONE)|(1<<_:WEAPON_GLOCK)|(1<<_:WEAPON_KNIFE)|(1<<_:WEAPON_C4))
@@ -251,29 +262,6 @@ stock const g_iMaxBPAmmo[any:WEAPON_P90 + 1] =
 	100, 120, 30, 120, 200, 32, 90, 120, 90, 2, 35, 90, 90, -1, 100
 }
 
-stock CSDM_SetFailState(const szMessage[], any:...)
-{
-	new szErrorMsg[191]
-	vformat(szErrorMsg, charsmax(szErrorMsg), szMessage, 2)
-
-	set_fail_state(szErrorMsg)
-}
-
-stock MakeDir(const szDirName[], bool:bPrint = true)
-{
-	if(!dir_exists(szDirName))
-	{
-		if(bPrint)
-		{
-			server_print("[CSDM] Directory %s not exist, will be created automatically.", szDirName)
-		}
-		if(mkdir(szDirName))
-		{
-			server_print("[CSDM] Failed to create directory %s", szDirName)
-		}
-	}
-}
-
 stock CSDM_PrintChat(const pPlayer, const ColorTypes:color, const fmt[], any:...)
 {
 	if(!is_user_connected(pPlayer))
@@ -298,6 +286,59 @@ stock CSDM_PrintChat(const pPlayer, const ColorTypes:color, const fmt[], any:...
 	{
 		SendSayText(pPlayer, szMessage)
 	}
+}
+
+stock CSDM_SetFailState(const szMessage[], any:...)
+{
+	new szErrorMsg[191]
+	vformat(szErrorMsg, charsmax(szErrorMsg), szMessage, 2)
+
+	set_fail_state(szErrorMsg)
+}
+
+stock MakeDir(const szDirName[], bool:bPrint = true)
+{
+	if(!dir_exists(szDirName))
+	{
+		if(bPrint)
+		{
+			server_print("[CSDM] Directory ^"%s^" not exist, will be created automatically.", szDirName)
+		}
+		if(mkdir(szDirName))
+		{
+			server_print("[CSDM] Failed to create directory ^"%s^"", szDirName)
+		}
+	}
+}
+
+// Fix: rg_give_item
+stock rg_give_item_ex(const index, const pszName[], any:iId, GiveType:type = GT_APPEND)
+{
+	const PRIMARY_BS = 
+	(
+		1<<CSW_SCOUT|1<<CSW_XM1014|1<<CSW_MAC10|1<<CSW_AUG|1<<CSW_UMP45|1<<CSW_SG550|1<<CSW_GALIL|1<<CSW_FAMAS|1<<CSW_AWP|
+		1<<CSW_MP5NAVY|1<<CSW_M249|1<<CSW_M3|1<<CSW_M4A1|1<<CSW_TMP|1<<CSW_G3SG1|1<<CSW_SG552|1<<CSW_AK47|1<<CSW_P90
+	)
+	if(type != GT_APPEND)
+	{
+		// new iId = get_weaponid(pszName)
+		if(((PRIMARY_BS & 1<<iId) || iId == CSW_ELITE) && get_member(index, m_bOwnsShield))
+		{
+			rg_remove_item(index, "weapon_shield")
+		}
+		else if(equal(pszName, "weapon_shield") && user_has_weapon(index, CSW_ELITE))
+		{
+			rg_remove_item(index, "weapon_elite")
+		}
+	}
+	rg_give_item(index, pszName, type)
+}
+
+stock rg_set_rendering(const pEntity, const fx = kRenderFxNone, const Float:flColor[] = {0.0, 0.0, 0.0}, const Float:iAmount = 0.0)
+{
+	set_entvar(pEntity, var_renderfx, fx)
+	set_entvar(pEntity, var_rendercolor, flColor)
+	set_entvar(pEntity, var_renderamt, iAmount)
 }
 
 stock SendTeamInfo(const pPlayer, const szTeam[])

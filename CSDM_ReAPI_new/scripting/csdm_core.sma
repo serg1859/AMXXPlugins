@@ -1,8 +1,8 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <fakemeta>
 #include <csdm>
+#include <fakemeta>
 
 
 #define IsPlayer(%1)				(1 <= %1 <= g_iMaxPlayers)
@@ -83,6 +83,7 @@ public plugin_end()
 public plugin_init()
 {
 	register_plugin(CSDM_PLUGIN_NAME, CSDM_VERSION_STRING, "Vaqtincha")
+	register_cvar("csdm_version", CSDM_VERSION_STRING, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED)
 
 	RegisterHookChain(RG_CSGameRules_RestartRound, "CSGameRules_RestartRound", .post = false)
 	RegisterHookChain(RG_CSGameRules_DeadPlayerWeapons, "CSGameRules_DeadPlayerWeapons", .post = false)
@@ -155,7 +156,7 @@ public bool:native_get_config_keyvalue(iPlugin, iParams)
 	strtolower(szKey)
 	if(!TrieGetString(g_tConfigValues, szKey, szValue, charsmax(szValue)))
 	{
-		server_print("[CSDM] ERROR: Key name ^"%s^" was not found!", szKey)
+		server_print("[CSDM] ERROR: Keyname ^"%s^" was not found!", szKey)
 		return false
 	}
 
@@ -389,7 +390,7 @@ TaskRespawnStart(const pPlayer, const Float:flDelay = 0.0)
 		}
 		if(g_bShowRespawnBar && flDelay >= 1.5 && !(Menu_ChooseTeam <= get_member(pPlayer, m_iMenu) <= Menu_ChooseAppearance))
 		{
-			rg_send_bartime(pPlayer, flDelay, false)
+			rg_send_bartime(pPlayer, floatround(flDelay), false)
 		}
 	}
 }
@@ -420,7 +421,7 @@ public SetCVarValues()
 
 LoadSettings(const ReadTypes:iReadAction = CFG_READ)
 {
-	new szLineData[MAX_LINE_LEN], eArrayData[config_s], pFile, iItemIndex = INVALID_INDEX, bool:bMainSettings
+	new szLineData[MAX_LINE_LEN + 4], eArrayData[config_s], pFile, iItemIndex = INVALID_INDEX, bool:bMainSettings
 	new szKey[MAX_KEY_LEN], szValue[MAX_VALUE_LEN], szSign[2]
 
 	if(!(pFile = OpenConfigFile()))
@@ -434,12 +435,13 @@ LoadSettings(const ReadTypes:iReadAction = CFG_READ)
 		fgets(pFile, szLineData, charsmax(szLineData))
 		trim(szLineData)
 
-		if(IsEmptyLine(szLineData) || IsCommentLine(szLineData))
+		if(!szLineData[0] || IsCommentLine(szLineData))
 			continue
 
 		if(szLineData[0] == '[')
 		{
 			bMainSettings = bool:(equali(szLineData, g_szMainSection))
+			
 			strtolower(szLineData)
 			if(g_iTotalItems && !TrieGetCell(g_tConfigSections, szLineData, iItemIndex))
 			{

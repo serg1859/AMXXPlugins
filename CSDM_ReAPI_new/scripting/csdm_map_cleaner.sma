@@ -1,14 +1,11 @@
 // Copyright © 2016 Vaqtincha
 
 #include <amxmodx>
-#include <fakemeta>
 #include <csdm>
+#include <fakemeta>
+#include <hamsandwich>
 
 
-#define SET_ORIGIN(%1,%2) 		engfunc(EngFunc_SetOrigin, %1, %2)
-#define SET_SIZE(%1,%2,%3) 		engfunc(EngFunc_SetSize, %1, %2, %3)
-#define REMOVE_ENTITY(%1) 		engfunc(EngFunc_RemoveEntity, %1)
-#define ENTITY_THINK(%1) 		dllfunc(DLLFunc_Think, %1)
 #define IsPlayer(%1)			(1 <= %1 <= g_iMaxPlayers)
 
 enum
@@ -47,7 +44,7 @@ new const g_szMapEntityList[][] =
 
 new Trie:g_tMapEntitys, g_iFwdEntitySpawn, g_iMaxPlayers, g_iFwdSetModel
 new g_bitRemoveObjects, bool:g_bRemoveWeapons, bool:g_bExcludeBomb
-
+new HamHook:g_hWeaponBoxSpawn, HamHook:g_hShieldSpawn
 
 public plugin_precache()
 {
@@ -86,6 +83,9 @@ public plugin_init()
 	if(g_tMapEntitys)
 		TrieDestroy(g_tMapEntitys)
 
+	DisableHamForward(g_hWeaponBoxSpawn = RegisterHam(Ham_Spawn, "weaponbox", "CWeaponBox_Spawn", .Post = true))
+	DisableHamForward(g_hShieldSpawn = RegisterHam(Ham_Spawn, "weapon_shield", "CWShield_Spawn", .Post = true))
+
 	g_iMaxPlayers = get_maxplayers()
 }
 
@@ -94,33 +94,41 @@ public plugin_cfg()
 	CheckForwards()
 }
 
-public Entity_SetModel(const pEntity, const szModel[])
+public CWShield_Spawn(const pShield)
 {
-	if(/* is_nullent(pEntity) || */ IsPlayer(pEntity))
-		return FMRES_IGNORED
+	if(pShield > 0 && IsPlayer(get_entvar(pShield, var_owner)))
+	{
+		set_entvar(pShield, var_flags, FL_KILLME)
+	}
+}
 
-	new iLen = strlen(szModel)
-	if((iLen == 22 && szModel[17] == 'x') || !(iLen >= 9 && szModel[8] == '_')) // "models/w_weaponbox.mdl" && "models/w_"
-		return FMRES_IGNORED
+public CWeaponBox_Spawn(const pWeaponBox)
+{
+	state SetModel_Enabled
+}
 
-	new szClassName[10]
-	get_entvar(pEntity, var_classname, szClassName, charsmax(szClassName))
 
-	if(szClassName[0] == 'w' && szClassName[8] == 'x') // weaponbox
+public Entity_SetModel(const pEntity, const szModel[]) <SetModel_Enabled>
+{
+	state SetModel_Disabled
+
+	if(pEntity > 0)
 	{
 		if(!g_bExcludeBomb && get_member(pEntity, m_WeaponBox_bIsBomb))
 		{
-			set_entvar(pEntity, var_flags, FL_KILLME)
+			KillWeaponBoxBomb(pEntity)
 			return FMRES_IGNORED
 		}
 
 		ENTITY_THINK(pEntity)
-	}
-	else if((szClassName[6] == '_' && szClassName[7] == 's' && szClassName[8] == 'h') && IsPlayer(get_entvar(pEntity, var_owner)))
-	{
-		set_entvar(pEntity, var_flags, FL_KILLME)
+		// set_entvar(pEntity, var_nextthink, get_gametime() + 0.1)
 	}
 
+	return FMRES_IGNORED
+}
+
+public Entity_SetModel(const pEntity, const szModel[]) <SetModel_Disabled>
+{
 	return FMRES_IGNORED
 }
 
@@ -180,12 +188,19 @@ CheckForwards()
 	if(g_bRemoveWeapons && !g_iFwdSetModel)
 	{
 		g_iFwdSetModel = register_forward(FM_SetModel, "Entity_SetModel", ._post = false)
+		EnableHamForward(g_hWeaponBoxSpawn)
+		EnableHamForward(g_hShieldSpawn)
 	}
 	else if(!g_bRemoveWeapons && g_iFwdSetModel)
 	{
 		unregister_forward(FM_SetModel, g_iFwdSetModel, .post = false)
+		DisableHamForward(g_hWeaponBoxSpawn)
+		DisableHamForward(g_hShieldSpawn)
+
 		g_iFwdSetModel = 0
 	}
+
+	state SetModel_Disabled
 }
 
 CreateBuyZone()
@@ -199,5 +214,22 @@ CreateBuyZone()
 	}
 }
 
+stock KillWeaponBoxBomb(const pWeaponBox)
+{
+	new pWeapon = get_member(pWeaponBox, m_WeaponBox_rgpPlayerItems, C4_SLOT)
+	if(!is_nullent(pWeapon))
+	{
+		set_entvar(pWeapon, var_flags, FL_KILLME)
+	}
+
+	set_entvar(pWeaponBox, var_flags, FL_KILLME)
+
+	static iMsgIdBombPickup
+	if(iMsgIdBombPickup || (iMsgIdBombPickup = get_user_msgid("BombPickup")))
+	{
+		message_begin(MSG_ALL, iMsgIdBombPickup)
+		message_end()
+	}
+}
 
 
