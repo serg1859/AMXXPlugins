@@ -66,7 +66,7 @@ public plugin_precache(){
 }
 
 public plugin_init(){
-	register_plugin("WinTeam Sprite", "0.0.1", "Some Scripter");
+	register_plugin("WinTeam Sprite", "0.0.2", "Some Scripter");
 	
 	register_clcmd(CMD,"FakeSwitch");
 	
@@ -94,7 +94,7 @@ public zp_round_ended(winteam){
 			StartDraw();
 		}
 		case WIN_HUMANS:{
-			g_iRoundState = ROUND_WIN_СT;
+			g_iRoundState = ROUND_WIN_CT;
 			StartDraw();
 		}
 	}
