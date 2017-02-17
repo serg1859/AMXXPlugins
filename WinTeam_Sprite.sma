@@ -50,6 +50,12 @@ new g_Sprites[][] =
 	#endif
 }
 
+#if defined USE_ON_ZM
+new const CMD[] = "zombie_win_sz";
+#else
+new const CMD[] = "z_aufff";
+#endif
+
 
 public plugin_precache(){
 	for(new i; i < sizeof(g_Sprites); i++){
@@ -59,11 +65,8 @@ public plugin_precache(){
 
 public plugin_init(){
 	register_plugin("WinTeam Sprite", "0.0.1", "Some Scripter");
-	#if !defined USE_ON_ZM
-	register_clcmd("z_aufff","FakeSwitch");
-	#else
-	register_clcmd("zombie_win_sz","FakeSwitch");
-	#endif
+	
+	register_clcmd(CMD,"FakeSwitch");
 	
 	#if !defined USE_ON_ZM	
 	register_event("HLTV", "Event_NewRound","a","1=0","2=0");
@@ -100,6 +103,7 @@ public zp_round_ended(winteam){
 	}
 }
 #else
+	
 public Event_CTWin(){
 	g_iRoundState = ROUND_WIN_CT;
 	StartDraw();
@@ -122,7 +126,7 @@ public Event_NewRound(){
 	}
 
 	g_iRoundState = ROUND_DRAW;
-	g_bSomeBool=false;
+	g_bSomeBool = false;
 	
 	Msg_ScreenFade();
 	Msg_HideWeapon();
@@ -147,7 +151,7 @@ public sendweapon(){
 	Msg_HideWeapon_2();
 	Msg_SetFOV();
 	
-	g_bSomeBool=false;
+	g_bSomeBool = false;
 	
 	if(g_iRoundState == ROUND_WIN_CT)
 	{
@@ -158,7 +162,7 @@ public sendweapon(){
 		Msg_CurWeapon_st2();
 	}
 	
-	g_bSomeBool=true;
+	g_bSomeBool = true;
 	
 	Msg_SetFOV_2();
 }
@@ -166,7 +170,7 @@ public sendweapon(){
 public StartDraw(){
 	Msg_ScreenFade_2();
 	
-	g_bSomeBool=true;
+	g_bSomeBool = true;
 	set_task(0.6,"sendweapon");
 }
 
@@ -191,11 +195,7 @@ stock Msg_WeaponList_Sprite()
 {
 	message_begin(MSG_ALL,g_Messages[g_iMsg_WeaponList],_,0);
 	{
-		#if !defined USE_ON_ZM
-		write_string("z_aufff");
-		#else
-		write_string("zombie_win_sz");
-		#endif
+		write_string(CMD);
 		write_byte(-1);
 		write_byte(-1);
 		write_byte(-1);
@@ -219,7 +219,7 @@ stock Msg_ScreenFade(){
 		write_byte(0);
 		write_byte(230);
 	}
-	message_end()
+	message_end();
 }
 
 stock Msg_ScreenFade_2(){
@@ -233,7 +233,7 @@ stock Msg_ScreenFade_2(){
 		write_byte(0);
 		write_byte(230);
 	}
-	message_end()
+	message_end();
 }
 
 stock Msg_CurWeapon(){
@@ -248,18 +248,22 @@ stock Msg_CurWeapon(){
 
 stock Msg_CurWeapon_st1(){		
 	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon],_,0);
-	write_byte(1);
-	write_byte(2);
-	write_byte(-1);
+	{
+		write_byte(1);
+		write_byte(2);
+		write_byte(-1);
+	}
 	message_end();
 }
 
 stock Msg_CurWeapon_st2()
 {		
 	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon],_,0);
-	write_byte(64);
-	write_byte(2);
-	write_byte(-1);
+	{
+		write_byte(64);
+		write_byte(2);
+		write_byte(-1);
+	}
 	message_end();
 }
 
