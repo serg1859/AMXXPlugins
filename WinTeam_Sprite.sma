@@ -1,4 +1,4 @@
-#define USE_ON_ZM
+// #define USE_ON_ZM
 
 #include <amxmodx>
 #if defined USE_ON_ZM
@@ -94,7 +94,7 @@ public zp_round_ended(winteam){
 			StartDraw();
 		}
 		case WIN_HUMANS:{
-			g_iRoundState = ROUND_WIN_CT;
+			g_iRoundState = ROUND_WIN_СT;
 			StartDraw();
 		}
 	}
