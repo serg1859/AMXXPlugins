@@ -4,13 +4,15 @@
 #if defined USE_ON_ZM
 	#include <zombieplague>
 #endif
-
+#define CSW_KNIFE 29
+#define CSW_SHIELD 2
+#define ORIGIN_FOV 90
 new bool:g_bSomeBool, g_iRoundState;
 
 enum _:ROUNDWIN_States {
-	ROUND_DRAW,
-	ROUND_WIN_CT,
-	ROUND_WIN_T	
+	ROUND_DRAW = 0,
+	ROUND_WIN_CT = 2,
+	ROUND_WIN_T = 1
 }
 
 enum _:MESSAGES {
@@ -77,11 +79,6 @@ public plugin_init(){
 	
 	for(new i; i < sizeof(g_Messages); i++){			
 		g_Messages[i] = get_user_msgid(g_Messages_Name[i]);
-		
-		if(i == g_iMsg_HideWeapon){
-			continue;
-		}
-		
 		register_message(g_Messages[i], "block");
 	}
 }
@@ -96,8 +93,8 @@ public zp_round_ended(winteam){
 			g_iRoundState = ROUND_WIN_T;
 			StartDraw();
 		}
-		case WIN_HUMANS{
-			g_iRoundState = ROUND_WIN_CT;
+		case WIN_HUMANS:{
+			g_iRoundState = ROUND_WIN_СT;
 			StartDraw();
 		}
 	}
@@ -153,13 +150,13 @@ public sendweapon(){
 	
 	g_bSomeBool = false;
 	
-	if(g_iRoundState == ROUND_WIN_CT)
-	{
-		Msg_CurWeapon_st1();
-	}
-	else if(g_iRoundState == ROUND_WIN_T)
-	{
-		Msg_CurWeapon_st2();
+	switch(g_iRoundState){
+		case ROUND_WIN_CT:{
+			Msg_CurWeapon_st1();
+		}
+		case ROUND_WIN_T:{
+			Msg_CurWeapon_st2();
+		}
 	}
 	
 	g_bSomeBool = true;
@@ -185,7 +182,7 @@ stock Msg_WeaponList(){
 		write_byte(-1);
 		write_byte(2);
 		write_byte(1);
-		write_byte(29);
+		write_byte(CSW_KNIFE);
 		write_byte(0);
 	}
 	message_end();
@@ -202,7 +199,7 @@ stock Msg_WeaponList_Sprite()
 		write_byte(-1);
 		write_byte(0);
 		write_byte(11);
-		write_byte(2);
+		write_byte(CSW_SHIELD);
 		write_byte(0);
 	}
 	message_end();
@@ -270,7 +267,7 @@ stock Msg_CurWeapon_st2()
 stock Msg_SetFOV(){
 	message_begin(MSG_ALL,g_Messages[g_iMsg_SetFOV],_,0);
 	{
-		write_byte(89);
+		write_byte(ORIGIN_FOV-1);
 	}
 	message_end();
 }
@@ -279,7 +276,7 @@ stock Msg_SetFOV_2()
 {
 	message_begin(MSG_ALL,g_Messages[g_iMsg_SetFOV],_,0);
 	{
-		write_byte(90);
+		write_byte(ORIGIN_FOV);
 	}
 	message_end();
 }
@@ -287,7 +284,7 @@ stock Msg_SetFOV_2()
 stock Msg_HideWeapon(){
 	message_begin(MSG_ALL,g_Messages[g_iMsg_HideWeapon],_,0);
 	{
-		write_byte(11);
+		write_byte(0);
 	}
 	message_end();
 }
