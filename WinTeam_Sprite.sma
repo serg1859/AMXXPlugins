@@ -94,7 +94,7 @@ public zp_round_ended(winteam){
 			StartDraw();
 		}
 		case WIN_HUMANS:{
-			g_iRoundState = ROUND_WIN_СT;
+			g_iRoundState = ROUND_WIN_CT;
 			StartDraw();
 		}
 	}
