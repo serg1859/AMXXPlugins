@@ -1,36 +1,52 @@
+/* Раскомментируйте, если вы используете ZombieMod версию. */
 // #define USE_ON_ZM
+/* ЗАтемнять ли экран? */
+#define FADE_SCREEN
+/*Скрывать ли прицел*/
+#define HIDE_CROSSHAIR
+
 
 #include <amxmodx>
 #if defined USE_ON_ZM
 	#include <zombieplague>
 #endif
-#define CSW_KNIFE 29
-#define CSW_SHIELD 2
-#define ORIGIN_FOV 90
+
+#define CSW_KNIFE	29
+#define CSW_SHIELD	2
+#define DEFAULT_FOV	90
+
 new bool:g_bSomeBool, g_iRoundState;
 
 enum _:ROUNDWIN_States {
 	ROUND_DRAW = 0,
-	ROUND_WIN_CT = 2,
-	ROUND_WIN_T = 1
+	ROUND_WIN_T,
+	ROUND_WIN_CT
 }
 
 enum _:MESSAGES {
 	g_iMsg_WeaponList,
+#if defined FADE_SCREEN
 	g_iMsg_ScreenFade,
+#endif
 	g_iMsg_CurWeapon,
 	g_iMsg_ForceCam,
 	g_iMsg_SetFOV,
+#if defined HIDE_CROSSHAIR
 	g_iMsg_HideWeapon
+#endif
 }
 	
 new g_Messages_Name[MESSAGES][] = {
 	"WeaponList",
+#if defined FADE_SCREEN
 	"ScreenFade",
+#endif
 	"CurWeapon",
 	"ForceCam",
 	"SetFOV",
+#if defined HIDE_CROSSHAIR
 	"HideWeapon"
+#endif
 }
 
 new g_Messages[MESSAGES];
@@ -38,7 +54,7 @@ new g_Messages[MESSAGES];
 new g_Sprites[][] = 
 {
 	#if !defined USE_ON_ZM
-	"sprites/z_aufff.txt",
+	"sprites/z_aufff_fmaledevcsrus.txt",
 	#else
 	"sprites/zombie_win_sz.txt",
 	#endif
@@ -46,7 +62,7 @@ new g_Sprites[][] =
 	"sprites/640hud10.spr",
 	"sprites/640hud7.spr",
 	#if !defined USE_ON_ZM
-	"sprites/winteam_asdasz.spr"
+	"sprites/winteam_fmaledevcsrus.spr"
 	#else
 	"sprites/zombie_win_uniq.spr"
 	#endif
@@ -55,7 +71,7 @@ new g_Sprites[][] =
 #if defined USE_ON_ZM
 new const CMD[] = "zombie_win_sz";
 #else
-new const CMD[] = "z_aufff";
+new const CMD[] = "z_aufff_fmaledevcsrus";
 #endif
 
 
@@ -66,12 +82,12 @@ public plugin_precache(){
 }
 
 public plugin_init(){
-	register_plugin("WinTeam Sprite", "0.0.2", "Some Scripter");
+	register_plugin("WinTeam Sprite", "0.0.5", "Some Scripter");
 	
 	register_clcmd(CMD,"FakeSwitch");
+	register_event("HLTV", "Event_NewRound","a","1=0","2=0");
 	
 	#if !defined USE_ON_ZM	
-	register_event("HLTV", "Event_NewRound","a","1=0","2=0");
 	register_event("SendAudio", "Event_CTWin","a","2=%!MRAD_ctwin");
 	register_event("SendAudio", "Event_TerroristWin","a","2=%!MRAD_terwin");
 	register_event("SendAudio", "Event_Draw","a","2=%!MRAD_rounddraw");
@@ -124,9 +140,12 @@ public Event_NewRound(){
 
 	g_iRoundState = ROUND_DRAW;
 	g_bSomeBool = false;
-	
+#if defined FADE_SCREEN
 	Msg_ScreenFade();
+#endif
+#if defined HIDE_CROSSHAIR
 	Msg_HideWeapon();
+#endif
 	Msg_WeaponList();
 	Msg_CurWeapon();
 }
@@ -145,18 +164,16 @@ public FakeSwitch(const client){
 
 public sendweapon(){
 	Msg_WeaponList_Sprite();
+#if defined HIDE_CROSSHAIR
 	Msg_HideWeapon_2();
+#endif
 	Msg_SetFOV();
 	
 	g_bSomeBool = false;
 	
 	switch(g_iRoundState){
-		case ROUND_WIN_CT:{
-			Msg_CurWeapon_st1();
-		}
-		case ROUND_WIN_T:{
-			Msg_CurWeapon_st2();
-		}
+		case ROUND_WIN_CT:	Msg_CurWeapon_st1();
+		case ROUND_WIN_T:	Msg_CurWeapon_st2();
 	}
 	
 	g_bSomeBool = true;
@@ -165,7 +182,9 @@ public sendweapon(){
 }
 
 public StartDraw(){
+	#if defined FADE_SCREEN
 	Msg_ScreenFade_2();
+	#endif
 	
 	g_bSomeBool = true;
 	set_task(0.6,"sendweapon");
@@ -173,7 +192,7 @@ public StartDraw(){
 
 
 stock Msg_WeaponList(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_WeaponList],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_WeaponList], .player = 0);
 	{
 		write_string("weapon_knife");
 		write_byte(-1);
@@ -205,8 +224,9 @@ stock Msg_WeaponList_Sprite()
 	message_end();
 }
 
+#if defined FADE_SCREEN
 stock Msg_ScreenFade(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_ScreenFade],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_ScreenFade], .player = 0);
 	{
 		write_short(1500);
 		write_short(700);
@@ -220,7 +240,7 @@ stock Msg_ScreenFade(){
 }
 
 stock Msg_ScreenFade_2(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_ScreenFade],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_ScreenFade], .player = 0);
 	{
 		write_short(9048);
 		write_short(11480);
@@ -232,9 +252,10 @@ stock Msg_ScreenFade_2(){
 	}
 	message_end();
 }
+#endif
 
 stock Msg_CurWeapon(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon], .player = 0);
 	{
 		write_byte(0);
 		write_byte(0);
@@ -244,7 +265,7 @@ stock Msg_CurWeapon(){
 }
 
 stock Msg_CurWeapon_st1(){		
-	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon], .player = 0);
 	{
 		write_byte(1);
 		write_byte(2);
@@ -255,7 +276,7 @@ stock Msg_CurWeapon_st1(){
 
 stock Msg_CurWeapon_st2()
 {		
-	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_CurWeapon], .player = 0);
 	{
 		write_byte(64);
 		write_byte(2);
@@ -265,24 +286,24 @@ stock Msg_CurWeapon_st2()
 }
 
 stock Msg_SetFOV(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_SetFOV],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_SetFOV], .player = 0);
 	{
-		write_byte(ORIGIN_FOV-1);
+		write_byte(DEFAULT_FOV-1);
 	}
 	message_end();
 }
 
 stock Msg_SetFOV_2()
 {
-	message_begin(MSG_ALL,g_Messages[g_iMsg_SetFOV],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_SetFOV], .player = 0);
 	{
-		write_byte(ORIGIN_FOV);
+		write_byte(DEFAULT_FOV);
 	}
 	message_end();
 }
-
+#if defined HIDE_CROSSHAIR
 stock Msg_HideWeapon(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_HideWeapon],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_HideWeapon], .player = 0);
 	{
 		write_byte(0);
 	}
@@ -290,9 +311,10 @@ stock Msg_HideWeapon(){
 }
 
 stock Msg_HideWeapon_2(){
-	message_begin(MSG_ALL,g_Messages[g_iMsg_HideWeapon],_,0);
+	message_begin(MSG_ALL,g_Messages[g_iMsg_HideWeapon], .player = 0);
 	{
 		write_byte(64);
 	}
 	message_end();
 }
+#endif
