@@ -124,7 +124,7 @@ forward ConfigReloaded()
 /** 
  * Set Weapon World Model
  * 
- * @param iEnt				iEntity
+ * @param iEnt				WeaponBox Entity
  * @param wEnt				Weapon Entity id
  * @param iImpulse			Weapon Impulse
  * @param iOwner			Player id
@@ -273,9 +273,8 @@ stock client_print_center(id, const szMsg[], const szSubMsg[]="")
 {
 	static iMsgIdTextMsg
 	if(!iMsgIdTextMsg)
-	{
 		iMsgIdTextMsg = get_user_msgid("TextMsg")
-	}
+
 	message_begin(MSG_ONE_UNRELIABLE, iMsgIdTextMsg, .player = id)
 	write_byte(print_center)
 	write_string(szMsg)
@@ -288,9 +287,8 @@ stock cs_set_user_money(id, iMoney, iFlash = 1)
 	set_pdata_int(id, m_iAccount, iMoney)
 	static iMsgIdMoney
 	if(!iMsgIdMoney)
-	{
 		iMsgIdMoney = get_user_msgid("Money")
-	}
+
 	message_begin(MSG_ONE, iMsgIdMoney, .player = id)
 	write_long(iMoney)
 	write_byte(iFlash ? 1 : 0)
@@ -371,13 +369,10 @@ stock GiveCustomWeapon(id, iId, iImpulse, iBpAmmo = 0, bool:bSound = true)
 		{
 			ExecuteHamB(Ham_Item_AttachToPlayer, wEnt, id)
 			if(iBpAmmo)
-			{
 				ExecuteHamB(Ham_GiveAmmo, id, iBpAmmo, g_szAmmoType[iId], iBpAmmo)
-			}
 			if(bSound)
-			{
 				emit_sound(id, CHAN_ITEM, "items/gunpickup2.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
-			}
+
 			return wEnt
 		}
 		set_pev(wEnt, pev_flags, pev(wEnt, pev_flags) | FL_KILLME)
@@ -412,25 +407,22 @@ stock ham_strip_user_weapon(id, iCswId, iSlot = 0, bool:bSwitchIfActive = true)
 		return 1
 	}
 	if(!iSlot)
-	{
 		iSlot = g_iWeaponSlots[iCswId]
-	}
+
 	new iWeapon = get_pdata_cbase(id, m_rgpPlayerItems_CBasePlayer[iSlot])
 
 	while(iWeapon > 0)
 	{
 		if(get_pdata_int(iWeapon, m_iId, XO_WEAPON) == iCswId)
-		{
 			break
-		}
+
 		iWeapon = get_pdata_cbase(iWeapon, m_pNext, XO_WEAPON)
 	}
 	if(iWeapon > 0)
 	{
 		if(bSwitchIfActive && get_pdata_cbase(id, m_pActiveItem) == iWeapon)
-		{
 			ExecuteHamB(Ham_Weapon_RetireWeapon, iWeapon)
-		}
+
 		if(ExecuteHamB(Ham_RemovePlayerItem, id, iWeapon))
 		{
 			user_has_weapon(id, iCswId, 0)

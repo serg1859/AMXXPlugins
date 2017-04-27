@@ -1,0 +1,33 @@
+﻿[ALL]
+add: Убран сток CSDM_PrintChat из csdm.inc теперь нужен colorchat.inc для AMXX <= 182 (в папке "AMXX 1.8.2 colorchat") 
+add: Рефакторинг кода
+
+[csdm_core]
+add: Добавил нативы CSDM_GetEquipmode/CSDM_SetEquipmode
+
+[csdm_spawn_manager]
+add: Изменен метод перемещение игроков
+add: Spawn Editor = Появилось отмена после удаление спавна (але undo)
+add: Spawn Editor = Изменен метод поиска спавн энтити
+fix: Spawn Editor = Исправлена возможная ошибка "out of bounds" при сохранении
+
+[csdm_equip_manager]
+add: [FREE_BUY] Новый параметр "freebuy_time" время покупки (в секундах) после спавна (антифлуд покупки). Работает как в оригинале (но не глобально!)
+add: [FREE_BUY] Новый параметр "freebuy_money" сколько давать деньги
+add: [EQUIP_MENU] Теперь закрывает меню если игрок умер н выбрав ничего
+add: [EQUIP_MENU] Проверка видит ли игрок при выпольнении команды guns...
+
+
+
+csdm_map_cleaner, csdm_misc, csdm_protection можно и не обновить но перекомпилите
+
+========================================================
+В планах:
+	Multilang,
+	ReloadConfig
+
+
+
+
+
+
