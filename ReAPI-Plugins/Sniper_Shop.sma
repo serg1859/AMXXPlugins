@@ -17,7 +17,7 @@ new g_ibitsFlagsToDiscount;
 
 public plugin_init()
 {
-	register_plugin("Sniper Shop", "0.0.3", "Dev-CS.ru Team");
+	register_plugin("Sniper Shop", "0.0.4", "Dev-CS.ru Team");
 	
 	RegisterHookChain(
 		RG_CSGameRules_RestartRound,
@@ -28,6 +28,12 @@ public plugin_init()
 	RegisterHookChain(
 		RH_SV_DropClient,
 		"SV_DropClient",
+		.post = true
+	);
+	
+	RegisterHookChain(
+		RG_CBasePlayer_Killed,
+		"CBasePlayer_Killed",
 		.post = true
 	);
 
@@ -137,6 +143,11 @@ public CSGameRules_RestartRound()
 }
 
 public SV_DropClient(pPlayerId)
+{
+	g_bMenu_Used[pPlayerId] = false;
+}
+
+public CBasePlayer_Killed()
 {
 	g_bMenu_Used[pPlayerId] = false;
 }
