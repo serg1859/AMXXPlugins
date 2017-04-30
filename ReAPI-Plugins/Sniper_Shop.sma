@@ -17,7 +17,7 @@ new g_ibitsFlagsToDiscount;
 
 public plugin_init()
 {
-	register_plugin("Sniper Shop", "0.0.2", "Dev-CS.ru Team");
+	register_plugin("Sniper Shop", "0.0.3", "Dev-CS.ru Team");
 	
 	RegisterHookChain(
 		RG_CSGameRules_RestartRound,
@@ -74,7 +74,7 @@ public ShowMenu_ChooseSnipers(pPlayerId)
 		return PLUGIN_HANDLED;
 	}
 	
-	if(!g_bMenu_Used[pPlayerId])
+	if(g_bMenu_Used[pPlayerId])
 	{
 		client_print(pPlayerId, print_chat, "Allowed to buy only 1 time!");
 		return PLUGIN_HANDLED;
@@ -120,7 +120,13 @@ public MenuHandler_ChooseSnipers(pPlayerId, key)
 	rg_give_item(pPlayerId, WeaponsArray[key][szClassname], .type = GT_DROP_AND_REPLACE);
 
 	new iWeaponConst = get_user_flags(pPlayerId) & g_ibitsFlagsToDiscount ? PercentSub(WeaponsArray[key][iCost], PERCENT_TO_DISCOUNT) : WeaponsArray[key][iCost];
-	set_member(pPlayerId, m_iAccount, get_member(pPlayerId, m_iAccount) - iWeaponConst);
+
+	rg_add_account(
+		pPlayerId,
+		-iWeaponConst,
+		.typeSet = AS_ADD,
+		.bTrackChange = true
+	);
 
 	g_bMenu_Used[pPlayerId] = true;
 }
