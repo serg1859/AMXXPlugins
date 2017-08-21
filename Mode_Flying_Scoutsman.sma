@@ -38,7 +38,7 @@ new const CLASS_WEAPON[] = "weapon_scout";
 new const CLASS_ArouryEntity[] = "armoury_entity";
 
 public plugin_init() {
-	register_plugin("Mode: Flying Scoutsman", "0.0.1", "wopox1337@Dev-CS.ru");
+	register_plugin("Mode: Flying Scoutsman", "0.0.2", "wopox1337@Dev-CS.ru");
 	
 	Hooks[_PrimaryAttack_Pre] = RegisterHam(Ham_Weapon_PrimaryAttack, CLASS_WEAPON, "CBasePlayerWeapon_PrimAttack", .Post = false);
 	Hooks[_PrimaryAttack_Post] = RegisterHam(Ham_Weapon_PrimaryAttack, CLASS_WEAPON, "CBasePlayerWeapon_PrimAttackP", .Post = true);
@@ -142,13 +142,13 @@ public CBasePlayerWeapon_PrimAttackP(pWeapon)
 	new pPlayer = get_pdata_cbase(pWeapon, m_pPlayer, XO_WEAPON);
 	if(pPlayer > 0)
 	{
-		if(g_vecVelocity[pPlayer][0] && g_vecVelocity[pPlayer][0] && g_vecVelocity[pPlayer][0])
+		if(g_vecVelocity[pPlayer][0] && g_vecVelocity[pPlayer][1] && g_vecVelocity[pPlayer][2])
 		{
 			set_pev(pPlayer, pev_velocity, g_vecVelocity[pPlayer]);
 			set_pev(pPlayer, pev_fov, float(get_pdata_int(pPlayer, m_iFOV)));
 			set_pev(pPlayer, pev_flags, pev(pPlayer, pev_flags) & ~FL_ONGROUND);
 
-			g_vecVelocity[pPlayer][0] = g_vecVelocity[pPlayer][0] = g_vecVelocity[pPlayer][0] = 0.0;
+			g_vecVelocity[pPlayer][0] = g_vecVelocity[pPlayer][1] = g_vecVelocity[pPlayer][2] = 0.0;
 		}
 	}
 }
