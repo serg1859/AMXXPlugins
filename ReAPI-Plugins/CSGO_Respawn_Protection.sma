@@ -1,10 +1,17 @@
-#include <amxmodx>
-#include <reapi>
 
 // How many seconds will protection take effect?
 const Float: PROTECTION_TIME = 15.0;
 
-enum { any: TASK_PROTECTION_OFF = 337 }
+
+#include <amxmodx>
+#include <reapi>
+
+
+#if AMXX_VERSION_NUM < 183
+	#define client_disconnected 		client_disconnect
+#endif
+
+const TASK_PROTECTION_OFF = 1337;
 
 const KEYS =
 (
@@ -13,7 +20,7 @@ const KEYS =
 	IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT
 )
 
-new bool: g_bProtected[MAX_CLIENTS + 1];
+new bool:g_bProtected[MAX_CLIENTS + 1];
 
 public plugin_init()
 {
@@ -23,37 +30,44 @@ public plugin_init()
 	RegisterHookChain(RG_CBasePlayer_PreThink, "CBasePlayer_PostThink", .post = true);
 }
 
-public CSGameRules_PlayerSpawn(pPlayer)
+public client_disconnected(pPlayer) 
+{
+	if(g_bProtected[pPlayer]) {
+		remove_task(TASK_PROTECTION_OFF + pPlayer);
+	}
+}
+
+public CSGameRules_PlayerSpawn(pPlayer) {
 	SetProtection(pPlayer);
-	
+}	
+
 public CBasePlayer_PostThink(pPlayer)
 {
-	if(g_bProtected[pPlayer])
-		if(is_UserPressKeys(pPlayer, KEYS))
-			Protection_Toggle(pPlayer, false);
+	if(g_bProtected[pPlayer] && is_UserPressKeys(pPlayer, KEYS)) {
+		Protection_Toggle(pPlayer, false);
+	}
 }
 
-public SetProtection(pPlayer)
-{	
-	Protection_Toggle(pPlayer, true);
-	
-	remove_task(TASK_PROTECTION_OFF + pPlayer);
-	set_task(PROTECTION_TIME, "EndProtection", TASK_PROTECTION_OFF + pPlayer);
-}
-
-public EndProtection(TaskID)
+public Task_EndProtection(TaskID)
 {
 	new pPlayer = TaskID - TASK_PROTECTION_OFF;
 
 	g_bProtected[pPlayer] = false;
 	
-	if(is_user_connected(pPlayer))
+	if(is_user_connected(pPlayer)) {
 		Protection_Toggle(pPlayer, false);
+	}
 }
 
+SetProtection(pPlayer)
+{	
+	Protection_Toggle(pPlayer, true);
+	
+	remove_task(TASK_PROTECTION_OFF + pPlayer);
+	set_task(PROTECTION_TIME, "Task_EndProtection", TASK_PROTECTION_OFF + pPlayer);
+}
 
-
-Protection_Toggle(pPlayer, bool: bEnabled)
+Protection_Toggle(pPlayer, bool:bEnabled)
 {
 	if(!bEnabled)
 	{
@@ -65,27 +79,21 @@ Protection_Toggle(pPlayer, bool: bEnabled)
 	{
 		set_entvar(pPlayer, var_solid, SOLID_NOT);
 		set_entvar(pPlayer, var_takedamage, DAMAGE_NO);
-		rg_set_rendering(pPlayer, .render = kRenderTransAdd, .amount = 150);
+		rg_set_rendering(pPlayer, .render = kRenderTransAdd, .amount = 150.0);
 	}
 	
 	g_bProtected[pPlayer] = bEnabled;
 }
 
-stock bool: is_UserPressKeys(pPlayer, keys)
-{
-	return (get_member(pPlayer, m_afButtonPressed) & keys) ? true : false;
+stock bool:is_UserPressKeys(pPlayer, keys) {
+	return bool:(get_member(pPlayer, m_afButtonPressed) & keys);
 }
 
-// Thanks to Vaqtincha for useful stock
-stock rg_set_rendering(index, fx = kRenderFxNone, r = 255, g = 255, b = 255, render = kRenderNormal, amount = 16)
+// Thanks to BAILOPAN for useful stock
+stock rg_set_rendering(index, /* fx = kRenderFxNone, */ const Float:flColor[3] = {255.0, 255.0, 255.0}, render = kRenderNormal, const Float:amount = 16.0)
 {
-    new Float:RenderColor[3];
-    RenderColor[0] = float(r);
-    RenderColor[1] = float(g);
-    RenderColor[2] = float(b);
-    
-    set_entvar(index, var_renderfx, fx);
-    set_entvar(index, var_rendercolor, RenderColor);
+    // set_entvar(index, var_renderfx, fx);
+    set_entvar(index, var_rendercolor, flColor);
     set_entvar(index, var_rendermode, render);
-    set_entvar(index, var_renderamt, float(amount));
+    set_entvar(index, var_renderamt, amount);
 }
