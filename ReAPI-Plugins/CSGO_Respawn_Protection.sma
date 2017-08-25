@@ -2,6 +2,8 @@
 // How many seconds will protection take effect?
 const Float: PROTECTION_TIME = 15.0;
 
+// Change solid prop of players
+#define ENABLE_SOLID
 
 #include <amxmodx>
 #include <reapi>
@@ -24,10 +26,10 @@ new bool:g_bProtected[MAX_CLIENTS + 1];
 
 public plugin_init()
 {
-	register_plugin("CS:GO Respawn Protection", "0.0.1", "wopox1337");
+	register_plugin("CS:GO Respawn Protection", "0.0.2", "wopox1337");
 
 	RegisterHookChain(RG_CSGameRules_PlayerSpawn, "CSGameRules_PlayerSpawn", .post = true);
-	RegisterHookChain(RG_CBasePlayer_PreThink, "CBasePlayer_PostThink", .post = true);
+	RegisterHookChain(RG_CBasePlayer_PostThink, "CBasePlayer_PostThink", .post = true);
 }
 
 public client_disconnected(pPlayer) 
@@ -71,13 +73,17 @@ Protection_Toggle(pPlayer, bool:bEnabled)
 {
 	if(!bEnabled)
 	{
+#if defined ENABLE_SOLID
 		set_entvar(pPlayer, var_solid, SOLID_BBOX);
+#endif
 		set_entvar(pPlayer, var_takedamage, DAMAGE_AIM);
 		rg_set_rendering(pPlayer);
 	}
 	else
 	{
+#if defined ENABLE_SOLID
 		set_entvar(pPlayer, var_solid, SOLID_NOT);
+#endif
 		set_entvar(pPlayer, var_takedamage, DAMAGE_NO);
 		rg_set_rendering(pPlayer, .render = kRenderTransAdd, .amount = 150.0);
 	}
@@ -92,8 +98,8 @@ stock bool:is_UserPressKeys(pPlayer, keys) {
 // Thanks to BAILOPAN for useful stock
 stock rg_set_rendering(index, /* fx = kRenderFxNone, */ const Float:flColor[3] = {255.0, 255.0, 255.0}, render = kRenderNormal, const Float:amount = 16.0)
 {
-    // set_entvar(index, var_renderfx, fx);
-    set_entvar(index, var_rendercolor, flColor);
-    set_entvar(index, var_rendermode, render);
-    set_entvar(index, var_renderamt, amount);
+	// set_entvar(index, var_renderfx, fx);
+	set_entvar(index, var_rendercolor, flColor);
+	set_entvar(index, var_rendermode, render);
+	set_entvar(index, var_renderamt, amount);
 }
