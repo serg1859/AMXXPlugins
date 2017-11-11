@@ -1,3 +1,4 @@
+/* Когда-нибудь он будет завершён. Но, не сегодня */
 #include <amxmodx>
 #include <fakemeta>
 #include <hamsandwich>
